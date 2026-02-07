@@ -21,6 +21,7 @@ const auctions_routes_1 = require("./modules/auctions/auctions.routes");
 const chat_routes_1 = require("./modules/chat/chat.routes");
 const reviews_routes_1 = require("./modules/reviews/reviews.routes");
 const media_routes_1 = require("./modules/media/media.routes");
+const users_routes_1 = require("./modules/users/users.routes");
 const db_1 = require("./db");
 const cron_1 = require("./cron");
 const app = (0, fastify_1.default)({
@@ -65,6 +66,7 @@ async function start() {
     await app.register(chat_routes_1.chatRoutes);
     await app.register(reviews_routes_1.reviewRoutes);
     await app.register(media_routes_1.mediaRoutes);
+    await app.register(users_routes_1.userRoutes);
     const port = Number(process.env.PORT ?? 3000);
     const host = process.env.HOST ?? "0.0.0.0";
     app.addHook("onClose", async () => {

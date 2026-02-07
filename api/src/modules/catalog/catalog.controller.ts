@@ -4,7 +4,10 @@ import { buildPagination, paginate } from "../../utils/pagination";
 import { CardQuery, SetQuery } from "./catalog.model";
 
 export async function listGames(_request: FastifyRequest, reply: FastifyReply) {
-  const games = await prisma.game.findMany({ orderBy: { name: "asc" } });
+  const games = await prisma.game.findMany({
+    where: { status: "ACTIVE" },
+    orderBy: { name: "asc" },
+  });
   return reply.send({ data: games });
 }
 
@@ -13,7 +16,7 @@ export async function listSets(request: FastifyRequest, reply: FastifyReply) {
   if (!parsed.success) return reply.code(400).send({ error: "Invalid query" });
 
   const sets = await prisma.set.findMany({
-    where: { gameId: parsed.data.gameId },
+    where: { gameId: parsed.data.gameId, game: { status: "ACTIVE" } },
     orderBy: { name: "asc" },
   });
 
@@ -25,7 +28,7 @@ export async function listCards(request: FastifyRequest, reply: FastifyReply) {
   if (!parsed.success) return reply.code(400).send({ error: "Invalid query" });
 
   const { page, pageSize, gameId, setId, q } = parsed.data;
-  const where: any = {};
+  const where: any = { game: { status: "ACTIVE" } };
   if (gameId) where.gameId = gameId;
   if (setId) where.setId = setId;
   if (q) where.name = { contains: q, mode: "insensitive" };

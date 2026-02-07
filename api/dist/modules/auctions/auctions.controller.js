@@ -11,16 +11,26 @@ async function listAuctions(request, reply) {
     const parsed = auctions_model_1.AuctionQuery.safeParse(request.query);
     if (!parsed.success)
         return reply.code(400).send({ error: "Invalid query" });
-    const { page, pageSize, status } = parsed.data;
+    const { page, pageSize, status, country, state, city } = parsed.data;
     const where = {};
     if (status)
         where.status = status;
+    if (country || state || city) {
+        const shippingFilter = {};
+        if (country)
+            shippingFilter.country = country.toUpperCase();
+        if (state)
+            shippingFilter.state = { contains: state, mode: "insensitive" };
+        if (city)
+            shippingFilter.city = { contains: city, mode: "insensitive" };
+        where.listing = { shippingFrom: { is: shippingFilter } };
+    }
     const { skip, take } = (0, pagination_1.paginate)(page, pageSize);
     const [total, data] = await Promise.all([
         db_1.prisma.auction.count({ where }),
         db_1.prisma.auction.findMany({
             where,
-            include: { listing: true },
+            include: { listing: { include: { shippingFrom: true } } },
             orderBy: { endAt: "asc" },
             skip,
             take,

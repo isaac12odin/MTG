@@ -28,7 +28,7 @@ async function listPublic(request, reply) {
     const parsed = listings_model_1.ListingQuery.safeParse(request.query);
     if (!parsed.success)
         return reply.code(400).send({ error: "Invalid query" });
-    const { page, pageSize, q, type, sellerId, gameId, setId, minPrice, maxPrice, condition, language, isFoil } = parsed.data;
+    const { page, pageSize, q, type, sellerId, gameId, setId, minPrice, maxPrice, condition, language, isFoil, country, state, city, } = parsed.data;
     const where = { status: "ACTIVE" };
     if (type)
         where.type = type;
@@ -62,6 +62,16 @@ async function listPublic(request, reply) {
                 },
             },
         };
+    }
+    if (country || state || city) {
+        const shippingFilter = {};
+        if (country)
+            shippingFilter.country = country.toUpperCase();
+        if (state)
+            shippingFilter.state = { contains: state, mode: "insensitive" };
+        if (city)
+            shippingFilter.city = { contains: city, mode: "insensitive" };
+        where.shippingFrom = { is: shippingFilter };
     }
     const { skip, take } = (0, pagination_1.paginate)(page, pageSize);
     const [total, data] = await Promise.all([

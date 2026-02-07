@@ -30,6 +30,11 @@ enum VerificationStatus {
   REJECTED
 }
 
+enum GameStatus {
+  ACTIVE
+  BANNED
+}
+
 enum ListingType {
   FIXED
   AUCTION
@@ -374,6 +379,7 @@ model Game {
   id        String   @id @default(uuid())
   name      String   @unique
   slug      String   @unique
+  status    GameStatus @default(ACTIVE)
   createdAt DateTime @default(now())
 
   sets  Set[]

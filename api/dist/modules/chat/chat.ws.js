@@ -117,6 +117,7 @@ async function registerChatWebsocket(app) {
                     socket.send(JSON.stringify({ type: "error", error: "Conversation not found" }));
                     return;
                 }
+                chat_hub_1.chatHub.markJoined(userId, socket, payload.conversationId);
                 socket.send(JSON.stringify({ type: "joined", conversationId: payload.conversationId }));
                 return;
             }
@@ -140,6 +141,7 @@ async function registerChatWebsocket(app) {
                     senderId: userId,
                     recipientId: result.recipientId,
                 });
+                chat_hub_1.chatHub.markJoined(userId, socket, payload.conversationId);
                 return;
             }
         });

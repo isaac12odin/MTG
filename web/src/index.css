@@ -1,0 +1,74 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  background: radial-gradient(circle at top, rgba(16, 185, 129, 0.12), transparent 45%),
+    radial-gradient(circle at 20% 20%, rgba(251, 191, 36, 0.08), transparent 35%), #0b0f14;
+  color: #e2e8f0;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@layer utilities {
+  .bg-grid {
+    background-image: linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+    background-size: 48px 48px;
+    background-position: center;
+  }
+
+  .text-glow {
+    text-shadow: 0 0 18px rgba(16, 185, 129, 0.35);
+  }
+
+  .glass {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(14px);
+  }
+
+  .animate-float {
+    animation: float 7s ease-in-out infinite;
+  }
+
+  .animate-fade-up {
+    animation: fade-up 0.9s ease forwards;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

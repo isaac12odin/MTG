@@ -17,8 +17,11 @@ import { auctionRoutes } from "./modules/auctions/auctions.routes";
 import { chatRoutes } from "./modules/chat/chat.routes";
 import { reviewRoutes } from "./modules/reviews/reviews.routes";
 import { mediaRoutes } from "./modules/media/media.routes";
+import { userRoutes } from "./modules/users/users.routes";
+import { adminRoutes } from "./modules/admin/admin.routes";
 import { prisma } from "./db";
 import { startCron } from "./cron";
+import { ensureAdminOnStart } from "./utils/bootstrap";
 
 const app = Fastify({
   logger: true,
@@ -67,6 +70,8 @@ async function start() {
   await app.register(chatRoutes);
   await app.register(reviewRoutes);
   await app.register(mediaRoutes);
+  await app.register(userRoutes);
+  await app.register(adminRoutes);
 
   const port = Number(process.env.PORT ?? 3000);
   const host = process.env.HOST ?? "0.0.0.0";
@@ -74,6 +79,8 @@ async function start() {
   app.addHook("onClose", async () => {
     await prisma.$disconnect();
   });
+
+  await ensureAdminOnStart();
 
   await app.listen({ port, host });
 

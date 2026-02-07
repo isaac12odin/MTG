@@ -20,4 +20,7 @@ export const AuctionQuery = z.object({
   status: z.enum(["SCHEDULED", "LIVE", "ENDED", "CANCELED"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  country: z.string().min(2).max(2).optional(),
+  state: z.string().max(100).optional(),
+  city: z.string().max(100).optional(),
 });

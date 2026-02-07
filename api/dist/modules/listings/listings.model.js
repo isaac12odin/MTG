@@ -16,6 +16,9 @@ exports.ListingQuery = zod_1.z.object({
     condition: zod_1.z.string().optional(),
     language: zod_1.z.string().optional(),
     isFoil: zod_1.z.coerce.boolean().optional(),
+    country: zod_1.z.string().min(2).max(2).optional(),
+    state: zod_1.z.string().max(100).optional(),
+    city: zod_1.z.string().max(100).optional(),
 });
 exports.ListingCreateSchema = zod_1.z.object({
     type: zod_1.z.enum(["FIXED", "AUCTION", "TRADE"]),

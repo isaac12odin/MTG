@@ -20,4 +20,7 @@ exports.AuctionQuery = zod_1.z.object({
     status: zod_1.z.enum(["SCHEDULED", "LIVE", "ENDED", "CANCELED"]).optional(),
     page: zod_1.z.coerce.number().int().min(1).default(1),
     pageSize: zod_1.z.coerce.number().int().min(1).max(100).default(20),
+    country: zod_1.z.string().min(2).max(2).optional(),
+    state: zod_1.z.string().max(100).optional(),
+    city: zod_1.z.string().max(100).optional(),
 });

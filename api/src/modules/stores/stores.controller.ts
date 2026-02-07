@@ -101,6 +101,14 @@ export async function createInventoryItem(request: FastifyRequest, reply: Fastif
   const plan = await getActivePlan(userId);
   if (!plan) return reply.code(402).send({ error: "No active plan" });
 
+  const card = await prisma.cardDefinition.findUnique({
+    where: { id: body.cardId },
+    include: { game: true },
+  });
+  if (!card || card.game.status !== "ACTIVE") {
+    return reply.code(400).send({ error: "Game is not available" });
+  }
+
   const item = await prisma.storeInventoryItem.create({
     data: {
       storeId: userId,
@@ -126,6 +134,18 @@ export async function bulkInventory(request: FastifyRequest, reply: FastifyReply
 
   const plan = await getActivePlan(userId);
   if (!plan) return reply.code(402).send({ error: "No active plan" });
+
+  const cardIds = body.items.map((item) => item.cardId);
+  const cards = await prisma.cardDefinition.findMany({
+    where: { id: { in: cardIds } },
+    include: { game: true },
+  });
+  if (cards.length !== cardIds.length) {
+    return reply.code(400).send({ error: "Invalid cards" });
+  }
+  if (cards.some((card) => card.game.status !== "ACTIVE")) {
+    return reply.code(400).send({ error: "Game is not available" });
+  }
 
   await prisma.storeInventoryItem.createMany({
     data: body.items.map((item) => ({

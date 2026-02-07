@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { prisma } from "../../db";
 import { VerifySchema } from "./moderation.model";
+import { chatHub } from "../chat/chat.hub";
 
 export async function verifyUser(request: FastifyRequest, reply: FastifyReply) {
   const body = VerifySchema.parse(request.body);
@@ -53,4 +54,9 @@ export async function hideReview(request: FastifyRequest, reply: FastifyReply) {
   });
 
   return reply.send({ data: updated });
+}
+
+export async function getChatStats(_request: FastifyRequest, reply: FastifyReply) {
+  const snapshot = chatHub.getActiveSnapshot();
+  return reply.send({ data: snapshot });
 }

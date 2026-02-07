@@ -1,0 +1,49 @@
+type ApiOptions = {
+  method?: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+};
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
+
+let accessToken: string | null = null;
+
+export function setApiToken(token: string | null) {
+  accessToken = token;
+}
+
+export async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers ?? {}),
+  };
+
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: options.method ?? "GET",
+    headers,
+    credentials: "include",
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+
+  if (!res.ok) {
+    const err = await safeJson(res);
+    const message = err?.error || `Request failed (${res.status})`;
+    throw new Error(message);
+  }
+
+  return (await safeJson(res)) as T;
+}
+
+async function safeJson(res: Response) {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}

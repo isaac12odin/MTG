@@ -2,8 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.verifyUser = verifyUser;
 exports.hideReview = hideReview;
+exports.getChatStats = getChatStats;
 const db_1 = require("../../db");
 const moderation_model_1 = require("./moderation.model");
+const chat_hub_1 = require("../chat/chat.hub");
 async function verifyUser(request, reply) {
     const body = moderation_model_1.VerifySchema.parse(request.body);
     const userId = request.params.id;
@@ -50,4 +52,8 @@ async function hideReview(request, reply) {
         data: { isHidden: true, hiddenAt: new Date(), hiddenById: moderatorId },
     });
     return reply.send({ data: updated });
+}
+async function getChatStats(_request, reply) {
+    const snapshot = chat_hub_1.chatHub.getActiveSnapshot();
+    return reply.send({ data: snapshot });
 }

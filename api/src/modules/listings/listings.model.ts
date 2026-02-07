@@ -13,6 +13,9 @@ export const ListingQuery = z.object({
   condition: z.string().optional(),
   language: z.string().optional(),
   isFoil: z.coerce.boolean().optional(),
+  country: z.string().min(2).max(2).optional(),
+  state: z.string().max(100).optional(),
+  city: z.string().max(100).optional(),
 });
 
 export const ListingCreateSchema = z.object({

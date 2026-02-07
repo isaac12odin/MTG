@@ -8,16 +8,27 @@ export async function listAuctions(request: FastifyRequest, reply: FastifyReply)
   const parsed = AuctionQuery.safeParse(request.query);
   if (!parsed.success) return reply.code(400).send({ error: "Invalid query" });
 
-  const { page, pageSize, status } = parsed.data;
+  const { page, pageSize, status, country, state, city } = parsed.data;
   const where: any = {};
   if (status) where.status = status;
+  const listingWhere: any = {
+    items: { some: { card: { game: { status: "ACTIVE" } } } },
+  };
+  if (country || state || city) {
+    const shippingFilter: any = {};
+    if (country) shippingFilter.country = country.toUpperCase();
+    if (state) shippingFilter.state = { contains: state, mode: "insensitive" };
+    if (city) shippingFilter.city = { contains: city, mode: "insensitive" };
+    listingWhere.shippingFrom = { is: shippingFilter };
+  }
+  where.listing = listingWhere;
 
   const { skip, take } = paginate(page, pageSize);
   const [total, data] = await Promise.all([
     prisma.auction.count({ where }),
     prisma.auction.findMany({
       where,
-      include: { listing: true },
+      include: { listing: { include: { shippingFrom: true } } },
       orderBy: { endAt: "asc" },
       skip,
       take,
@@ -29,8 +40,8 @@ export async function listAuctions(request: FastifyRequest, reply: FastifyReply)
 
 export async function getAuction(request: FastifyRequest, reply: FastifyReply) {
   const id = (request.params as { id: string }).id;
-  const auction = await prisma.auction.findUnique({
-    where: { id },
+  const auction = await prisma.auction.findFirst({
+    where: { id, listing: { items: { some: { card: { game: { status: "ACTIVE" } } } } } },
     include: { listing: true, bids: true },
   });
   if (!auction) return reply.code(404).send({ error: "Not found" });

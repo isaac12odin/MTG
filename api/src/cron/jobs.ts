@@ -170,133 +170,97 @@ export async function autoRelistUnpaidAuctions() {
 }
 
 export async function recalcReputation() {
-  type ReviewAggRow = {
-    userId: string;
-    reviewCount: number;
-    positiveCount: number;
-    negativeCount: number;
-  };
-  type CountRow = { userId: string; count: number };
-
-  const [users, reviewAgg, salesAgg, buysAgg, unpaidAgg, disputeAgg] = await Promise.all([
-    prisma.user.findMany({ select: { id: true } }),
-    prisma.$queryRaw<ReviewAggRow[]>`
-      SELECT "targetId" as "userId",
-             COUNT(*)::int as "reviewCount",
-             SUM(CASE WHEN "rating" >= 4 THEN 1 ELSE 0 END)::int as "positiveCount",
-             SUM(CASE WHEN "rating" <= 2 THEN 1 ELSE 0 END)::int as "negativeCount"
+  await prisma.$executeRaw`
+    WITH reviews AS (
+      SELECT "targetId" AS "userId",
+             COUNT(*)::int AS "reviewCount",
+             SUM(CASE WHEN "rating" >= 4 THEN 1 ELSE 0 END)::int AS "positiveCount",
+             SUM(CASE WHEN "rating" <= 2 THEN 1 ELSE 0 END)::int AS "negativeCount"
       FROM "Review"
       GROUP BY "targetId"
-    `,
-    prisma.$queryRaw<CountRow[]>`
-      SELECT "sellerId" as "userId", COUNT(*)::int as "count"
+    ),
+    sales AS (
+      SELECT "sellerId" AS "userId", COUNT(*)::int AS "completedSales"
       FROM "Deal"
       WHERE "status" = 'COMPLETED'
       GROUP BY "sellerId"
-    `,
-    prisma.$queryRaw<CountRow[]>`
-      SELECT "buyerId" as "userId", COUNT(*)::int as "count"
+    ),
+    buys AS (
+      SELECT "buyerId" AS "userId", COUNT(*)::int AS "completedBuys"
       FROM "Deal"
       WHERE "status" = 'COMPLETED'
       GROUP BY "buyerId"
-    `,
-    prisma.$queryRaw<CountRow[]>`
-      SELECT "buyerId" as "userId", COUNT(*)::int as "count"
+    ),
+    unpaids AS (
+      SELECT "buyerId" AS "userId", COUNT(*)::int AS "unpaidCount"
       FROM "Deal"
       WHERE "status" = 'UNPAID_RELISTED'
       GROUP BY "buyerId"
-    `,
-    prisma.$queryRaw<CountRow[]>`
-      SELECT "userId", COUNT(*)::int as "count"
+    ),
+    disputes AS (
+      SELECT "userId", COUNT(*)::int AS "disputeCount"
       FROM (
-        SELECT "buyerId" as "userId" FROM "Deal" WHERE "status" = 'DISPUTED'
+        SELECT "buyerId" AS "userId" FROM "Deal" WHERE "status" = 'DISPUTED'
         UNION ALL
-        SELECT "sellerId" as "userId" FROM "Deal" WHERE "status" = 'DISPUTED'
+        SELECT "sellerId" AS "userId" FROM "Deal" WHERE "status" = 'DISPUTED'
       ) t
       GROUP BY "userId"
-    `,
-  ]);
-
-  const reviewMap = new Map<string, ReviewAggRow>();
-  for (const row of reviewAgg) {
-    reviewMap.set(row.userId, row);
-  }
-
-  const salesMap = new Map<string, number>();
-  for (const row of salesAgg) salesMap.set(row.userId, row.count);
-
-  const buysMap = new Map<string, number>();
-  for (const row of buysAgg) buysMap.set(row.userId, row.count);
-
-  const unpaidMap = new Map<string, number>();
-  for (const row of unpaidAgg) unpaidMap.set(row.userId, row.count);
-
-  const disputeMap = new Map<string, number>();
-  for (const row of disputeAgg) disputeMap.set(row.userId, row.count);
-
-  const updates = users.map((user) => {
-    const review = reviewMap.get(user.id);
-    const reviewCount = review?.reviewCount ?? 0;
-    const positiveCount = review?.positiveCount ?? 0;
-    const negativeCount = review?.negativeCount ?? 0;
-    const completedSales = salesMap.get(user.id) ?? 0;
-    const completedBuys = buysMap.get(user.id) ?? 0;
-    const unpaidCount = unpaidMap.get(user.id) ?? 0;
-    const disputeCount = disputeMap.get(user.id) ?? 0;
-
-    const score =
-      positiveCount * 10 -
-      negativeCount * 15 +
-      completedSales * 2 +
-      completedBuys * 1 -
-      unpaidCount * 20 -
-      disputeCount * 10;
-    const sellerScore =
-      positiveCount * 8 +
-      completedSales * 2 -
-      unpaidCount * 20 -
-      disputeCount * 10;
-    const buyerScore =
-      positiveCount * 4 +
-      completedBuys * 1 -
-      disputeCount * 8;
-
-    return prismaAny.userReputation.upsert({
-      where: { userId: user.id },
-      update: {
-        score,
-        sellerScore,
-        buyerScore,
-        reviewCount,
-        positiveCount,
-        negativeCount,
-        completedSales,
-        completedBuys,
-        unpaidCount,
-        disputeCount,
-        lastCalculatedAt: new Date(),
-      },
-      create: {
-        userId: user.id,
-        score,
-        sellerScore,
-        buyerScore,
-        reviewCount,
-        positiveCount,
-        negativeCount,
-        completedSales,
-        completedBuys,
-        unpaidCount,
-        disputeCount,
-        lastCalculatedAt: new Date(),
-      },
-    });
-  });
-
-  const CHUNK_SIZE = 200;
-  for (let i = 0; i < updates.length; i += CHUNK_SIZE) {
-    await prisma.$transaction(updates.slice(i, i + CHUNK_SIZE));
-  }
+    )
+    INSERT INTO "UserReputation" (
+      "userId",
+      "score",
+      "sellerScore",
+      "buyerScore",
+      "reviewCount",
+      "positiveCount",
+      "negativeCount",
+      "completedSales",
+      "completedBuys",
+      "unpaidCount",
+      "disputeCount",
+      "lastCalculatedAt",
+      "updatedAt",
+      "createdAt"
+    )
+    SELECT
+      u.id,
+      (COALESCE(r."positiveCount", 0) * 10) - (COALESCE(r."negativeCount", 0) * 15)
+        + (COALESCE(s."completedSales", 0) * 2) + (COALESCE(b."completedBuys", 0) * 1)
+        - (COALESCE(u2."unpaidCount", 0) * 20) - (COALESCE(d."disputeCount", 0) * 10) AS "score",
+      (COALESCE(r."positiveCount", 0) * 8) + (COALESCE(s."completedSales", 0) * 2)
+        - (COALESCE(u2."unpaidCount", 0) * 20) - (COALESCE(d."disputeCount", 0) * 10) AS "sellerScore",
+      (COALESCE(r."positiveCount", 0) * 4) + (COALESCE(b."completedBuys", 0) * 1)
+        - (COALESCE(d."disputeCount", 0) * 8) AS "buyerScore",
+      COALESCE(r."reviewCount", 0) AS "reviewCount",
+      COALESCE(r."positiveCount", 0) AS "positiveCount",
+      COALESCE(r."negativeCount", 0) AS "negativeCount",
+      COALESCE(s."completedSales", 0) AS "completedSales",
+      COALESCE(b."completedBuys", 0) AS "completedBuys",
+      COALESCE(u2."unpaidCount", 0) AS "unpaidCount",
+      COALESCE(d."disputeCount", 0) AS "disputeCount",
+      NOW() AS "lastCalculatedAt",
+      NOW() AS "updatedAt",
+      NOW() AS "createdAt"
+    FROM "User" u
+    LEFT JOIN reviews r ON u.id = r."userId"
+    LEFT JOIN sales s ON u.id = s."userId"
+    LEFT JOIN buys b ON u.id = b."userId"
+    LEFT JOIN unpaids u2 ON u.id = u2."userId"
+    LEFT JOIN disputes d ON u.id = d."userId"
+    ON CONFLICT ("userId") DO UPDATE SET
+      "score" = EXCLUDED."score",
+      "sellerScore" = EXCLUDED."sellerScore",
+      "buyerScore" = EXCLUDED."buyerScore",
+      "reviewCount" = EXCLUDED."reviewCount",
+      "positiveCount" = EXCLUDED."positiveCount",
+      "negativeCount" = EXCLUDED."negativeCount",
+      "completedSales" = EXCLUDED."completedSales",
+      "completedBuys" = EXCLUDED."completedBuys",
+      "unpaidCount" = EXCLUDED."unpaidCount",
+      "disputeCount" = EXCLUDED."disputeCount",
+      "lastCalculatedAt" = NOW(),
+      "updatedAt" = NOW()
+  `;
 
   await prisma.$executeRaw`
     UPDATE "UserReputation" ur

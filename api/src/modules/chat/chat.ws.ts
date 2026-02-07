@@ -129,6 +129,7 @@ export async function registerChatWebsocket(app: FastifyInstance) {
           socket.send(JSON.stringify({ type: "error", error: "Conversation not found" }));
           return;
         }
+        chatHub.markJoined(userId, socket, payload.conversationId);
         socket.send(JSON.stringify({ type: "joined", conversationId: payload.conversationId }));
         return;
       }
@@ -157,6 +158,7 @@ export async function registerChatWebsocket(app: FastifyInstance) {
           recipientId: result.recipientId,
         });
 
+        chatHub.markJoined(userId, socket, payload.conversationId);
         return;
       }
     });

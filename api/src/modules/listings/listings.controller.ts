@@ -22,7 +22,23 @@ export async function listPublic(request: FastifyRequest, reply: FastifyReply) {
   const parsed = ListingQuery.safeParse(request.query);
   if (!parsed.success) return reply.code(400).send({ error: "Invalid query" });
 
-  const { page, pageSize, q, type, sellerId, gameId, setId, minPrice, maxPrice, condition, language, isFoil } = parsed.data;
+  const {
+    page,
+    pageSize,
+    q,
+    type,
+    sellerId,
+    gameId,
+    setId,
+    minPrice,
+    maxPrice,
+    condition,
+    language,
+    isFoil,
+    country,
+    state,
+    city,
+  } = parsed.data;
 
   const where: any = { status: "ACTIVE" };
   if (type) where.type = type;
@@ -41,15 +57,20 @@ export async function listPublic(request: FastifyRequest, reply: FastifyReply) {
       { description: { contains: q, mode: "insensitive" } },
     ];
   }
-  if (gameId || setId) {
-    where.items = {
-      some: {
-        card: {
-          ...(gameId ? { gameId } : {}),
-          ...(setId ? { setId } : {}),
-        },
-      },
-    };
+  const itemCardWhere: any = { game: { status: "ACTIVE" } };
+  if (gameId) itemCardWhere.gameId = gameId;
+  if (setId) itemCardWhere.setId = setId;
+  where.items = {
+    some: {
+      card: itemCardWhere,
+    },
+  };
+  if (country || state || city) {
+    const shippingFilter: any = {};
+    if (country) shippingFilter.country = country.toUpperCase();
+    if (state) shippingFilter.state = { contains: state, mode: "insensitive" };
+    if (city) shippingFilter.city = { contains: city, mode: "insensitive" };
+    where.shippingFrom = { is: shippingFilter };
   }
 
   const { skip, take } = paginate(page, pageSize);
@@ -73,18 +94,27 @@ export async function listPublic(request: FastifyRequest, reply: FastifyReply) {
 export async function getById(request: FastifyRequest, reply: FastifyReply) {
   await maybeAuth(request);
   const id = (request.params as { id: string }).id;
-  const listing = await prisma.listing.findUnique({ where: { id }, select: listingSelect(false) });
-  if (!listing) return reply.code(404).send({ error: "Not found" });
+  const base = await prisma.listing.findUnique({ where: { id }, select: { sellerId: true, status: true } });
+  if (!base) return reply.code(404).send({ error: "Not found" });
 
-  const isOwner = request.user?.sub === listing.sellerId;
-  if (!isOwner && listing.status !== "ACTIVE") {
-    return reply.code(404).send({ error: "Not found" });
-  }
-
+  const isOwner = request.user?.sub === base.sellerId;
   if (isOwner) {
     const full = await prisma.listing.findUnique({ where: { id }, select: listingSelect(true) });
     return reply.send({ data: full });
   }
+
+  if (base.status !== "ACTIVE") {
+    return reply.code(404).send({ error: "Not found" });
+  }
+
+  const listing = await prisma.listing.findFirst({
+    where: {
+      id,
+      items: { some: { card: { game: { status: "ACTIVE" } } } },
+    },
+    select: listingSelect(false),
+  });
+  if (!listing) return reply.code(404).send({ error: "Not found" });
 
   return reply.send({ data: listing });
 }
@@ -136,6 +166,18 @@ export async function createListing(request: FastifyRequest, reply: FastifyReply
     if (ownedAssets.length !== body.mediaAssetIds.length) {
       return reply.code(400).send({ error: "Invalid media assets" });
     }
+  }
+
+  const cardIds = body.items.map((item) => item.cardId);
+  const cards = await prisma.cardDefinition.findMany({
+    where: { id: { in: cardIds } },
+    include: { game: true },
+  });
+  if (cards.length !== cardIds.length) {
+    return reply.code(400).send({ error: "Invalid cards" });
+  }
+  if (cards.some((card) => card.game.status !== "ACTIVE")) {
+    return reply.code(400).send({ error: "Game is not available" });
   }
 
   const listing = await prisma.listing.create({

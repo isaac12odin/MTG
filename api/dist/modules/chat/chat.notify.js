@@ -27,7 +27,7 @@ async function notifyNewMessage(params) {
     });
     if (!shouldSendEmail(recipientId, message.conversationId))
         return;
-    if (chat_hub_1.chatHub.hasActiveSocket(recipientId))
+    if (chat_hub_1.chatHub.hasActiveSocket(recipientId, message.conversationId))
         return;
     const recipient = await db_1.prisma.user.findUnique({
         where: { id: recipientId },
