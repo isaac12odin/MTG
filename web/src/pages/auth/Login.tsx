@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 
@@ -30,9 +30,11 @@ export function Login() {
     return "/";
   };
 
-  if (user?.roles?.length) {
-    navigate(redirectByRole(user.roles), { replace: true });
-  }
+  useEffect(() => {
+    if (user?.roles?.length) {
+      navigate(redirectByRole(user.roles), { replace: true });
+    }
+  }, [user, navigate]);
 
   return (
     <div>

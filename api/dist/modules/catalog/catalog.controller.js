@@ -7,7 +7,10 @@ const db_1 = require("../../db");
 const pagination_1 = require("../../utils/pagination");
 const catalog_model_1 = require("./catalog.model");
 async function listGames(_request, reply) {
-    const games = await db_1.prisma.game.findMany({ orderBy: { name: "asc" } });
+    const games = await db_1.prisma.game.findMany({
+        where: { status: "ACTIVE" },
+        orderBy: { name: "asc" },
+    });
     return reply.send({ data: games });
 }
 async function listSets(request, reply) {
@@ -15,7 +18,7 @@ async function listSets(request, reply) {
     if (!parsed.success)
         return reply.code(400).send({ error: "Invalid query" });
     const sets = await db_1.prisma.set.findMany({
-        where: { gameId: parsed.data.gameId },
+        where: { gameId: parsed.data.gameId, game: { status: "ACTIVE" } },
         orderBy: { name: "asc" },
     });
     return reply.send({ data: sets });
@@ -25,7 +28,7 @@ async function listCards(request, reply) {
     if (!parsed.success)
         return reply.code(400).send({ error: "Invalid query" });
     const { page, pageSize, gameId, setId, q } = parsed.data;
-    const where = {};
+    const where = { game: { status: "ACTIVE" } };
     if (gameId)
         where.gameId = gameId;
     if (setId)

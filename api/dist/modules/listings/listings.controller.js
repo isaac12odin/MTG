@@ -53,16 +53,16 @@ async function listPublic(request, reply) {
             { description: { contains: q, mode: "insensitive" } },
         ];
     }
-    if (gameId || setId) {
-        where.items = {
-            some: {
-                card: {
-                    ...(gameId ? { gameId } : {}),
-                    ...(setId ? { setId } : {}),
-                },
-            },
-        };
-    }
+    const itemCardWhere = { game: { status: "ACTIVE" } };
+    if (gameId)
+        itemCardWhere.gameId = gameId;
+    if (setId)
+        itemCardWhere.setId = setId;
+    where.items = {
+        some: {
+            card: itemCardWhere,
+        },
+    };
     if (country || state || city) {
         const shippingFilter = {};
         if (country)
@@ -92,17 +92,26 @@ async function listPublic(request, reply) {
 async function getById(request, reply) {
     await maybeAuth(request);
     const id = request.params.id;
-    const listing = await db_1.prisma.listing.findUnique({ where: { id }, select: (0, listings_model_1.listingSelect)(false) });
-    if (!listing)
+    const base = await db_1.prisma.listing.findUnique({ where: { id }, select: { sellerId: true, status: true } });
+    if (!base)
         return reply.code(404).send({ error: "Not found" });
-    const isOwner = request.user?.sub === listing.sellerId;
-    if (!isOwner && listing.status !== "ACTIVE") {
-        return reply.code(404).send({ error: "Not found" });
-    }
+    const isOwner = request.user?.sub === base.sellerId;
     if (isOwner) {
         const full = await db_1.prisma.listing.findUnique({ where: { id }, select: (0, listings_model_1.listingSelect)(true) });
         return reply.send({ data: full });
     }
+    if (base.status !== "ACTIVE") {
+        return reply.code(404).send({ error: "Not found" });
+    }
+    const listing = await db_1.prisma.listing.findFirst({
+        where: {
+            id,
+            items: { some: { card: { game: { status: "ACTIVE" } } } },
+        },
+        select: (0, listings_model_1.listingSelect)(false),
+    });
+    if (!listing)
+        return reply.code(404).send({ error: "Not found" });
     return reply.send({ data: listing });
 }
 async function listMine(request, reply) {
@@ -147,6 +156,17 @@ async function createListing(request, reply) {
         if (ownedAssets.length !== body.mediaAssetIds.length) {
             return reply.code(400).send({ error: "Invalid media assets" });
         }
+    }
+    const cardIds = body.items.map((item) => item.cardId);
+    const cards = await db_1.prisma.cardDefinition.findMany({
+        where: { id: { in: cardIds } },
+        include: { game: true },
+    });
+    if (cards.length !== cardIds.length) {
+        return reply.code(400).send({ error: "Invalid cards" });
+    }
+    if (cards.some((card) => card.game.status !== "ACTIVE")) {
+        return reply.code(400).send({ error: "Game is not available" });
     }
     const listing = await db_1.prisma.listing.create({
         data: {

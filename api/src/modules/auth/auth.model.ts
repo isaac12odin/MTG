@@ -1,15 +1,17 @@
 import { z } from "zod";
 import type { FastifyRequest } from "fastify";
 
+export const PASSWORD_MIN = Number(process.env.PASSWORD_MIN ?? 8);
+
 export const RegisterSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(12),
+  password: z.string().min(PASSWORD_MIN),
   phone: z.string().optional().nullable(),
 });
 
 export const LoginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(12),
+  password: z.string().min(PASSWORD_MIN),
 });
 
 export const VerifyEmailSchema = z.object({

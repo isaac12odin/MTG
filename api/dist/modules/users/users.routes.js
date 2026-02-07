@@ -11,4 +11,5 @@ async function userRoutes(app) {
     app.put("/me/addresses/:id", { preHandler: guards_1.requireAuth }, users_controller_1.updateAddress);
     app.delete("/me/addresses/:id", { preHandler: guards_1.requireAuth }, users_controller_1.deleteAddress);
     app.post("/me/addresses/:id/default", { preHandler: guards_1.requireAuth }, users_controller_1.setDefaultAddress);
+    app.post("/me/verification-requests", { preHandler: guards_1.requireAuth }, users_controller_1.requestVerification);
 }

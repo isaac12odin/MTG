@@ -1,17 +1,18 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.REFRESH_COOKIE = exports.ACCESS_TTL_MINUTES = exports.LOCKOUT_MINUTES = exports.MAX_FAILED_LOGINS = exports.OTP_TTL_MINUTES = exports.LogoutSchema = exports.RefreshSchema = exports.ResendSchema = exports.VerifyEmailSchema = exports.LoginSchema = exports.RegisterSchema = void 0;
+exports.REFRESH_COOKIE = exports.ACCESS_TTL_MINUTES = exports.LOCKOUT_MINUTES = exports.MAX_FAILED_LOGINS = exports.OTP_TTL_MINUTES = exports.LogoutSchema = exports.RefreshSchema = exports.ResendSchema = exports.VerifyEmailSchema = exports.LoginSchema = exports.RegisterSchema = exports.PASSWORD_MIN = void 0;
 exports.cookieOptions = cookieOptions;
 exports.getIp = getIp;
 const zod_1 = require("zod");
+exports.PASSWORD_MIN = Number(process.env.PASSWORD_MIN ?? 8);
 exports.RegisterSchema = zod_1.z.object({
     email: zod_1.z.string().email(),
-    password: zod_1.z.string().min(12),
+    password: zod_1.z.string().min(exports.PASSWORD_MIN),
     phone: zod_1.z.string().optional().nullable(),
 });
 exports.LoginSchema = zod_1.z.object({
     email: zod_1.z.string().email(),
-    password: zod_1.z.string().min(12),
+    password: zod_1.z.string().min(exports.PASSWORD_MIN),
 });
 exports.VerifyEmailSchema = zod_1.z.object({
     email: zod_1.z.string().email(),

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AddressUpdateSchema = exports.AddressCreateSchema = exports.ProfileUpdateSchema = void 0;
+exports.VerificationRequestSchema = exports.AddressUpdateSchema = exports.AddressCreateSchema = exports.ProfileUpdateSchema = void 0;
 const zod_1 = require("zod");
 const countryCode = zod_1.z
     .string()
@@ -27,3 +27,7 @@ exports.AddressCreateSchema = zod_1.z.object({
     isDefault: zod_1.z.boolean().optional(),
 });
 exports.AddressUpdateSchema = exports.AddressCreateSchema.partial();
+exports.VerificationRequestSchema = zod_1.z.object({
+    method: zod_1.z.enum(["VIDEO_CALL", "COMMUNITY"]).default("VIDEO_CALL"),
+    notes: zod_1.z.string().max(500).optional(),
+});

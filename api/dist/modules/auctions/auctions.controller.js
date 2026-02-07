@@ -15,6 +15,9 @@ async function listAuctions(request, reply) {
     const where = {};
     if (status)
         where.status = status;
+    const listingWhere = {
+        items: { some: { card: { game: { status: "ACTIVE" } } } },
+    };
     if (country || state || city) {
         const shippingFilter = {};
         if (country)
@@ -23,8 +26,9 @@ async function listAuctions(request, reply) {
             shippingFilter.state = { contains: state, mode: "insensitive" };
         if (city)
             shippingFilter.city = { contains: city, mode: "insensitive" };
-        where.listing = { shippingFrom: { is: shippingFilter } };
+        listingWhere.shippingFrom = { is: shippingFilter };
     }
+    where.listing = listingWhere;
     const { skip, take } = (0, pagination_1.paginate)(page, pageSize);
     const [total, data] = await Promise.all([
         db_1.prisma.auction.count({ where }),
@@ -40,8 +44,8 @@ async function listAuctions(request, reply) {
 }
 async function getAuction(request, reply) {
     const id = request.params.id;
-    const auction = await db_1.prisma.auction.findUnique({
-        where: { id },
+    const auction = await db_1.prisma.auction.findFirst({
+        where: { id, listing: { items: { some: { card: { game: { status: "ACTIVE" } } } } } },
         include: { listing: true, bids: true },
     });
     if (!auction)

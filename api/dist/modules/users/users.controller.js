@@ -7,6 +7,7 @@ exports.createAddress = createAddress;
 exports.updateAddress = updateAddress;
 exports.deleteAddress = deleteAddress;
 exports.setDefaultAddress = setDefaultAddress;
+exports.requestVerification = requestVerification;
 const db_1 = require("../../db");
 const crypto_1 = require("../../security/crypto");
 const users_model_1 = require("./users.model");
@@ -158,4 +159,25 @@ async function setDefaultAddress(request, reply) {
         db_1.prisma.address.update({ where: { id }, data: { isDefault: true } }),
     ]);
     return reply.send({ ok: true });
+}
+async function requestVerification(request, reply) {
+    const body = users_model_1.VerificationRequestSchema.parse(request.body);
+    const userId = request.user?.sub;
+    if (!userId)
+        return reply.code(401).send({ error: "Unauthorized" });
+    const existing = await db_1.prisma.verificationRequest.findFirst({
+        where: { userId, status: "PENDING" },
+    });
+    if (existing) {
+        return reply.send({ data: existing });
+    }
+    const created = await db_1.prisma.verificationRequest.create({
+        data: {
+            userId,
+            method: body.method,
+            status: "PENDING",
+            notes: body.notes,
+        },
+    });
+    return reply.code(201).send({ data: created });
 }

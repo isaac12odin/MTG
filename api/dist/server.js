@@ -22,8 +22,10 @@ const chat_routes_1 = require("./modules/chat/chat.routes");
 const reviews_routes_1 = require("./modules/reviews/reviews.routes");
 const media_routes_1 = require("./modules/media/media.routes");
 const users_routes_1 = require("./modules/users/users.routes");
+const admin_routes_1 = require("./modules/admin/admin.routes");
 const db_1 = require("./db");
 const cron_1 = require("./cron");
+const bootstrap_1 = require("./utils/bootstrap");
 const app = (0, fastify_1.default)({
     logger: true,
     trustProxy: true,
@@ -67,11 +69,13 @@ async function start() {
     await app.register(reviews_routes_1.reviewRoutes);
     await app.register(media_routes_1.mediaRoutes);
     await app.register(users_routes_1.userRoutes);
+    await app.register(admin_routes_1.adminRoutes);
     const port = Number(process.env.PORT ?? 3000);
     const host = process.env.HOST ?? "0.0.0.0";
     app.addHook("onClose", async () => {
         await db_1.prisma.$disconnect();
     });
+    await (0, bootstrap_1.ensureAdminOnStart)();
     await app.listen({ port, host });
     (0, cron_1.startCron)();
 }
