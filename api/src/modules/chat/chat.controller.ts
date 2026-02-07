@@ -2,7 +2,9 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { prisma } from "../../db";
 import { buildPagination, paginate } from "../../utils/pagination";
-import { CreateConversationSchema, MessageSchema, MessagesQuery, MESSAGE_TTL_DAYS } from "./chat.model";
+import { CreateConversationSchema, MessageSchema, MessagesQuery } from "./chat.model";
+import { createMessage } from "./chat.service";
+import { notifyNewMessage } from "./chat.notify";
 
 export async function listConversations(request: FastifyRequest, reply: FastifyReply) {
   const userId = request.user?.sub;
@@ -75,18 +77,14 @@ export async function sendMessage(request: FastifyRequest, reply: FastifyReply) 
   if (!userId) return reply.code(401).send({ error: "Unauthorized" });
 
   const id = (request.params as { id: string }).id;
-  const convo = await prisma.conversation.findFirst({
-    where: { id, OR: [{ userAId: userId }, { userBId: userId }] },
-  });
-  if (!convo) return reply.code(404).send({ error: "Not found" });
+  const result = await createMessage({ conversationId: id, senderId: userId, text: body.text });
+  if (!result.ok) return reply.code(result.status).send({ error: result.error });
 
-  const expiresAt = new Date(Date.now() + MESSAGE_TTL_DAYS * 24 * 60 * 60 * 1000);
-
-  const message = await prisma.message.create({
-    data: { conversationId: id, senderId: userId, text: body.text, expiresAt },
+  await notifyNewMessage({
+    message: result.message,
+    senderId: userId,
+    recipientId: result.recipientId,
   });
 
-  await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
-
-  return reply.code(201).send({ data: message });
+  return reply.code(201).send({ data: result.message });
 }

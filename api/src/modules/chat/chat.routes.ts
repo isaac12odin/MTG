@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../../security/guards";
 import { createConversation, listConversations, listMessages, sendMessage } from "./chat.controller";
+import { registerChatWebsocket } from "./chat.ws";
 
 export async function chatRoutes(app: FastifyInstance) {
   app.get("/conversations", { preHandler: requireAuth }, listConversations);
@@ -15,4 +16,6 @@ export async function chatRoutes(app: FastifyInstance) {
     { preHandler: requireAuth, config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
     sendMessage
   );
+
+  await registerChatWebsocket(app);
 }

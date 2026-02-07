@@ -7,6 +7,8 @@ exports.sendMessage = sendMessage;
 const db_1 = require("../../db");
 const pagination_1 = require("../../utils/pagination");
 const chat_model_1 = require("./chat.model");
+const chat_service_1 = require("./chat.service");
+const chat_notify_1 = require("./chat.notify");
 async function listConversations(request, reply) {
     const userId = request.user?.sub;
     if (!userId)
@@ -71,15 +73,13 @@ async function sendMessage(request, reply) {
     if (!userId)
         return reply.code(401).send({ error: "Unauthorized" });
     const id = request.params.id;
-    const convo = await db_1.prisma.conversation.findFirst({
-        where: { id, OR: [{ userAId: userId }, { userBId: userId }] },
+    const result = await (0, chat_service_1.createMessage)({ conversationId: id, senderId: userId, text: body.text });
+    if (!result.ok)
+        return reply.code(result.status).send({ error: result.error });
+    await (0, chat_notify_1.notifyNewMessage)({
+        message: result.message,
+        senderId: userId,
+        recipientId: result.recipientId,
     });
-    if (!convo)
-        return reply.code(404).send({ error: "Not found" });
-    const expiresAt = new Date(Date.now() + chat_model_1.MESSAGE_TTL_DAYS * 24 * 60 * 60 * 1000);
-    const message = await db_1.prisma.message.create({
-        data: { conversationId: id, senderId: userId, text: body.text, expiresAt },
-    });
-    await db_1.prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
-    return reply.code(201).send({ data: message });
+    return reply.code(201).send({ data: result.message });
 }

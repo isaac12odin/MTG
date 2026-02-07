@@ -10,6 +10,7 @@ const cors_1 = __importDefault(require("@fastify/cors"));
 const cookie_1 = __importDefault(require("@fastify/cookie"));
 const rate_limit_1 = __importDefault(require("@fastify/rate-limit"));
 const multipart_1 = __importDefault(require("@fastify/multipart"));
+const websocket_1 = __importDefault(require("@fastify/websocket"));
 const zod_1 = require("zod");
 const auth_routes_1 = require("./modules/auth/auth.routes");
 const moderation_routes_1 = require("./modules/moderation/moderation.routes");
@@ -42,6 +43,7 @@ async function start() {
             files: 1,
         },
     });
+    await app.register(websocket_1.default);
     await app.register(rate_limit_1.default, {
         max: 200,
         timeWindow: "10 minute",

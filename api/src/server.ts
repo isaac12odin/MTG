@@ -5,6 +5,7 @@ import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
+import websocket from "@fastify/websocket";
 import { ZodError } from "zod";
 
 import { authRoutes } from "./modules/auth/auth.routes";
@@ -41,6 +42,7 @@ async function start() {
       files: 1,
     },
   });
+  await app.register(websocket);
   await app.register(rateLimit, {
     max: 200,
     timeWindow: "10 minute",
