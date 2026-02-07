@@ -170,30 +170,98 @@ export async function autoRelistUnpaidAuctions() {
 }
 
 export async function recalcReputation() {
-  const users = await prisma.user.findMany({
-    select: {
-      id: true,
-      roles: { select: { role: true } },
-    },
-  });
+  type ReviewAggRow = {
+    userId: string;
+    reviewCount: number;
+    positiveCount: number;
+    negativeCount: number;
+  };
+  type CountRow = { userId: string; count: number };
 
-  for (const user of users) {
-    const [reviewCount, positiveCount, negativeCount, completedSales, completedBuys, unpaidCount, disputeCount] =
-      await Promise.all([
-        prisma.review.count({ where: { targetId: user.id } }),
-        prisma.review.count({ where: { targetId: user.id, rating: { gte: 4 } } }),
-        prisma.review.count({ where: { targetId: user.id, rating: { lte: 2 } } }),
-        prisma.deal.count({ where: { sellerId: user.id, status: "COMPLETED" } }),
-        prisma.deal.count({ where: { buyerId: user.id, status: "COMPLETED" } }),
-        prisma.deal.count({ where: { buyerId: user.id, status: "UNPAID_RELISTED" } }),
-        prisma.deal.count({ where: { status: "DISPUTED", OR: [{ buyerId: user.id }, { sellerId: user.id }] } }),
-      ]);
+  const [users, reviewAgg, salesAgg, buysAgg, unpaidAgg, disputeAgg] = await Promise.all([
+    prisma.user.findMany({ select: { id: true } }),
+    prisma.$queryRaw<ReviewAggRow[]>`
+      SELECT "targetId" as "userId",
+             COUNT(*)::int as "reviewCount",
+             SUM(CASE WHEN "rating" >= 4 THEN 1 ELSE 0 END)::int as "positiveCount",
+             SUM(CASE WHEN "rating" <= 2 THEN 1 ELSE 0 END)::int as "negativeCount"
+      FROM "Review"
+      GROUP BY "targetId"
+    `,
+    prisma.$queryRaw<CountRow[]>`
+      SELECT "sellerId" as "userId", COUNT(*)::int as "count"
+      FROM "Deal"
+      WHERE "status" = 'COMPLETED'
+      GROUP BY "sellerId"
+    `,
+    prisma.$queryRaw<CountRow[]>`
+      SELECT "buyerId" as "userId", COUNT(*)::int as "count"
+      FROM "Deal"
+      WHERE "status" = 'COMPLETED'
+      GROUP BY "buyerId"
+    `,
+    prisma.$queryRaw<CountRow[]>`
+      SELECT "buyerId" as "userId", COUNT(*)::int as "count"
+      FROM "Deal"
+      WHERE "status" = 'UNPAID_RELISTED'
+      GROUP BY "buyerId"
+    `,
+    prisma.$queryRaw<CountRow[]>`
+      SELECT "userId", COUNT(*)::int as "count"
+      FROM (
+        SELECT "buyerId" as "userId" FROM "Deal" WHERE "status" = 'DISPUTED'
+        UNION ALL
+        SELECT "sellerId" as "userId" FROM "Deal" WHERE "status" = 'DISPUTED'
+      ) t
+      GROUP BY "userId"
+    `,
+  ]);
 
-    const score = positiveCount * 10 - negativeCount * 15 + completedSales * 2 + completedBuys * 1 - unpaidCount * 20 - disputeCount * 10;
-    const sellerScore = positiveCount * 8 + completedSales * 2 - unpaidCount * 20 - disputeCount * 10;
-    const buyerScore = positiveCount * 4 + completedBuys * 1 - disputeCount * 8;
+  const reviewMap = new Map<string, ReviewAggRow>();
+  for (const row of reviewAgg) {
+    reviewMap.set(row.userId, row);
+  }
 
-    await prismaAny.userReputation.upsert({
+  const salesMap = new Map<string, number>();
+  for (const row of salesAgg) salesMap.set(row.userId, row.count);
+
+  const buysMap = new Map<string, number>();
+  for (const row of buysAgg) buysMap.set(row.userId, row.count);
+
+  const unpaidMap = new Map<string, number>();
+  for (const row of unpaidAgg) unpaidMap.set(row.userId, row.count);
+
+  const disputeMap = new Map<string, number>();
+  for (const row of disputeAgg) disputeMap.set(row.userId, row.count);
+
+  const updates = users.map((user) => {
+    const review = reviewMap.get(user.id);
+    const reviewCount = review?.reviewCount ?? 0;
+    const positiveCount = review?.positiveCount ?? 0;
+    const negativeCount = review?.negativeCount ?? 0;
+    const completedSales = salesMap.get(user.id) ?? 0;
+    const completedBuys = buysMap.get(user.id) ?? 0;
+    const unpaidCount = unpaidMap.get(user.id) ?? 0;
+    const disputeCount = disputeMap.get(user.id) ?? 0;
+
+    const score =
+      positiveCount * 10 -
+      negativeCount * 15 +
+      completedSales * 2 +
+      completedBuys * 1 -
+      unpaidCount * 20 -
+      disputeCount * 10;
+    const sellerScore =
+      positiveCount * 8 +
+      completedSales * 2 -
+      unpaidCount * 20 -
+      disputeCount * 10;
+    const buyerScore =
+      positiveCount * 4 +
+      completedBuys * 1 -
+      disputeCount * 8;
+
+    return prismaAny.userReputation.upsert({
       where: { userId: user.id },
       update: {
         score,
@@ -223,31 +291,30 @@ export async function recalcReputation() {
         lastCalculatedAt: new Date(),
       },
     });
-  }
-
-  const reputations = await prismaAny.userReputation.findMany({
-    orderBy: { sellerScore: "desc" },
   });
 
-  let sellerRank = 1;
-  for (const rep of reputations) {
-    await prismaAny.userReputation.update({
-      where: { userId: rep.userId },
-      data: { sellerRank },
-    });
-    sellerRank += 1;
+  const CHUNK_SIZE = 200;
+  for (let i = 0; i < updates.length; i += CHUNK_SIZE) {
+    await prisma.$transaction(updates.slice(i, i + CHUNK_SIZE));
   }
 
-  const buyerRanks = await prismaAny.userReputation.findMany({
-    orderBy: { buyerScore: "desc" },
-  });
+  await prisma.$executeRaw`
+    UPDATE "UserReputation" ur
+    SET "sellerRank" = ranked.rn
+    FROM (
+      SELECT "userId", ROW_NUMBER() OVER (ORDER BY "sellerScore" DESC) AS rn
+      FROM "UserReputation"
+    ) ranked
+    WHERE ur."userId" = ranked."userId"
+  `;
 
-  let buyerRank = 1;
-  for (const rep of buyerRanks) {
-    await prismaAny.userReputation.update({
-      where: { userId: rep.userId },
-      data: { buyerRank },
-    });
-    buyerRank += 1;
-  }
+  await prisma.$executeRaw`
+    UPDATE "UserReputation" ur
+    SET "buyerRank" = ranked.rn
+    FROM (
+      SELECT "userId", ROW_NUMBER() OVER (ORDER BY "buyerScore" DESC) AS rn
+      FROM "UserReputation"
+    ) ranked
+    WHERE ur."userId" = ranked."userId"
+  `;
 }

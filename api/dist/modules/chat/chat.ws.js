@@ -7,6 +7,8 @@ const chat_model_1 = require("./chat.model");
 const chat_service_1 = require("./chat.service");
 const chat_notify_1 = require("./chat.notify");
 const chat_hub_1 = require("./chat.hub");
+const HEARTBEAT_INTERVAL_MS = Number(process.env.WS_HEARTBEAT_INTERVAL_MS ?? 30000);
+const HEARTBEAT_TIMEOUT_MS = Number(process.env.WS_HEARTBEAT_TIMEOUT_MS ?? 30000);
 function extractToken(req) {
     const auth = req.headers.authorization;
     if (typeof auth === "string" && auth.startsWith("Bearer ")) {
@@ -35,6 +37,7 @@ async function registerChatWebsocket(app) {
     app.get("/ws/chat", { websocket: true }, async (socket, req) => {
         const token = extractToken(req);
         if (!token) {
+            socket.send(JSON.stringify({ type: "error", error: "Unauthorized" }));
             socket.close(1008, "Unauthorized");
             return;
         }
@@ -43,18 +46,54 @@ async function registerChatWebsocket(app) {
             const payload = await (0, jwt_1.verifyAccessToken)(token);
             const deny = await db_1.prisma.accessTokenDenylist.findUnique({ where: { jti: payload.jti } });
             if (deny) {
+                socket.send(JSON.stringify({ type: "error", error: "Token revoked" }));
                 socket.close(1008, "Token revoked");
                 return;
             }
             userId = payload.sub;
         }
         catch {
+            socket.send(JSON.stringify({ type: "error", error: "Invalid token" }));
             socket.close(1008, "Invalid token");
             return;
         }
         chat_hub_1.chatHub.addSocket(userId, socket);
         socket.send(JSON.stringify({ type: "ready", userId }));
+        let isAlive = true;
+        socket.on("pong", () => {
+            isAlive = true;
+        });
+        const heartbeat = setInterval(() => {
+            if (!isAlive) {
+                try {
+                    socket.terminate();
+                }
+                catch {
+                    // ignore
+                }
+                return;
+            }
+            isAlive = false;
+            try {
+                socket.ping();
+            }
+            catch {
+                // ignore ping failures
+            }
+        }, HEARTBEAT_INTERVAL_MS);
+        const heartbeatTimeout = setTimeout(() => {
+            if (!isAlive) {
+                try {
+                    socket.terminate();
+                }
+                catch {
+                    // ignore
+                }
+            }
+        }, HEARTBEAT_TIMEOUT_MS);
         socket.on("close", () => {
+            clearInterval(heartbeat);
+            clearTimeout(heartbeatTimeout);
             chat_hub_1.chatHub.removeSocket(userId, socket);
         });
         socket.on("message", async (raw) => {
