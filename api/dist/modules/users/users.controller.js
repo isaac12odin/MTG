@@ -8,6 +8,11 @@ exports.updateAddress = updateAddress;
 exports.deleteAddress = deleteAddress;
 exports.setDefaultAddress = setDefaultAddress;
 exports.requestVerification = requestVerification;
+exports.followUser = followUser;
+exports.unfollowUser = unfollowUser;
+exports.listFollowers = listFollowers;
+exports.listFollowing = listFollowing;
+exports.getPublicProfile = getPublicProfile;
 const db_1 = require("../../db");
 const crypto_1 = require("../../security/crypto");
 const users_model_1 = require("./users.model");
@@ -17,7 +22,13 @@ async function getMe(request, reply) {
         return reply.code(401).send({ error: "Unauthorized" });
     const user = await db_1.prisma.user.findUnique({
         where: { id: userId },
-        include: { profile: true, security: true, reputation: true },
+        include: {
+            profile: true,
+            security: true,
+            reputation: true,
+            followers: true,
+            following: true,
+        },
     });
     if (!user)
         return reply.code(404).send({ error: "Not found" });
@@ -32,6 +43,10 @@ async function getMe(request, reply) {
                 manualVerifiedAt: user.security?.manualVerifiedAt ?? null,
             },
             reputation: user.reputation,
+            counts: {
+                followers: user.followers.length,
+                following: user.following.length,
+            },
         },
     });
 }
@@ -180,4 +195,69 @@ async function requestVerification(request, reply) {
         },
     });
     return reply.code(201).send({ data: created });
+}
+async function followUser(request, reply) {
+    const userId = request.user?.sub;
+    if (!userId)
+        return reply.code(401).send({ error: "Unauthorized" });
+    const targetId = request.params.id;
+    if (targetId === userId)
+        return reply.code(400).send({ error: "Cannot follow yourself" });
+    const existing = await db_1.prisma.userFollow.findFirst({
+        where: { followerId: userId, followingId: targetId },
+    });
+    if (existing)
+        return reply.send({ data: existing });
+    const follow = await db_1.prisma.userFollow.create({
+        data: { followerId: userId, followingId: targetId },
+    });
+    return reply.code(201).send({ data: follow });
+}
+async function unfollowUser(request, reply) {
+    const userId = request.user?.sub;
+    if (!userId)
+        return reply.code(401).send({ error: "Unauthorized" });
+    const targetId = request.params.id;
+    await db_1.prisma.userFollow.deleteMany({
+        where: { followerId: userId, followingId: targetId },
+    });
+    return reply.send({ ok: true });
+}
+async function listFollowers(request, reply) {
+    const targetId = request.params.id;
+    const followers = await db_1.prisma.userFollow.findMany({
+        where: { followingId: targetId },
+        include: { follower: { select: { id: true, profile: true } } },
+        orderBy: { createdAt: "desc" },
+    });
+    return reply.send({ data: followers });
+}
+async function listFollowing(request, reply) {
+    const targetId = request.params.id;
+    const following = await db_1.prisma.userFollow.findMany({
+        where: { followerId: targetId },
+        include: { following: { select: { id: true, profile: true } } },
+        orderBy: { createdAt: "desc" },
+    });
+    return reply.send({ data: following });
+}
+async function getPublicProfile(request, reply) {
+    const id = request.params.id;
+    const user = await db_1.prisma.user.findUnique({
+        where: { id },
+        include: { profile: true, reputation: true, followers: true, following: true },
+    });
+    if (!user)
+        return reply.code(404).send({ error: "Not found" });
+    return reply.send({
+        data: {
+            id: user.id,
+            profile: user.profile,
+            reputation: user.reputation,
+            counts: {
+                followers: user.followers.length,
+                following: user.following.length,
+            },
+        },
+    });
 }

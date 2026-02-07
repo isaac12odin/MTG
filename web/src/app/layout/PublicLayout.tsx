@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { useAuth } from "../providers/AuthProvider";
 
 const navItems = [
   { label: "Cartas", to: "/#cartas" },
@@ -10,6 +11,7 @@ const navItems = [
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const { user } = useAuth();
   return (
     <div className="min-h-screen bg-ink-950 text-slate-100">
       <div className="bg-grid">
@@ -41,12 +43,29 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="hidden items-center gap-3 md:flex">
-            <Link
-              to="/login"
-              className="rounded-full border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white/80 transition hover:border-jade-400/60 hover:text-jade-300"
-            >
-              Acceso
-            </Link>
+            {user ? (
+              <Link
+                to="/account"
+                className="rounded-full border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white/80 transition hover:border-jade-400/60 hover:text-jade-300"
+              >
+                Mi cuenta
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="rounded-full border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white/80 transition hover:border-jade-400/60 hover:text-jade-300"
+                >
+                  Acceso
+                </Link>
+                <Link
+                  to="/register"
+                  className="rounded-full border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white/80 transition hover:border-amber-300/60 hover:text-amber-200"
+                >
+                  Crear cuenta
+                </Link>
+              </>
+            )}
             <button className="rounded-full bg-jade-500 px-5 py-2 text-xs font-semibold text-ink-950 transition hover:bg-jade-400">
               Publicar carta
             </button>
@@ -68,12 +87,29 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   {item.label}
                 </a>
               ))}
-              <Link
-                to="/login"
-                className="rounded-xl border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white/80"
-              >
-                Acceso
-              </Link>
+              {user ? (
+                <Link
+                  to="/account"
+                  className="rounded-xl border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white/80"
+                >
+                  Mi cuenta
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    className="rounded-xl border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white/80"
+                  >
+                    Acceso
+                  </Link>
+                  <Link
+                    to="/register"
+                    className="rounded-xl border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white/80"
+                  >
+                    Crear cuenta
+                  </Link>
+                </>
+              )}
               <button className="rounded-xl bg-jade-500 px-4 py-2 text-xs font-semibold text-ink-950">
                 Publicar carta
               </button>

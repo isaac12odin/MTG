@@ -2,7 +2,12 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { prisma } from "../../db";
 import { decryptNullable, decryptString } from "../../security/crypto";
-import { AddressCreateSchema, AddressUpdateSchema, ProfileUpdateSchema, VerificationRequestSchema } from "./users.model";
+import {
+  AddressCreateSchema,
+  AddressUpdateSchema,
+  ProfileUpdateSchema,
+  VerificationRequestSchema,
+} from "./users.model";
 
 export async function getMe(request: FastifyRequest, reply: FastifyReply) {
   const userId = request.user?.sub;
@@ -10,7 +15,14 @@ export async function getMe(request: FastifyRequest, reply: FastifyReply) {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: { profile: true, security: true, reputation: true },
+    include: {
+      profile: true,
+      security: true,
+      reputation: true,
+      followers: true,
+      following: true,
+      roles: true,
+    },
   });
   if (!user) return reply.code(404).send({ error: "Not found" });
 
@@ -25,6 +37,11 @@ export async function getMe(request: FastifyRequest, reply: FastifyReply) {
         manualVerifiedAt: user.security?.manualVerifiedAt ?? null,
       },
       reputation: user.reputation,
+      counts: {
+        followers: user.followers.length,
+        following: user.following.length,
+      },
+      roles: user.roles.map((r) => r.role),
     },
   });
 }
@@ -190,4 +207,73 @@ export async function requestVerification(request: FastifyRequest, reply: Fastif
   });
 
   return reply.code(201).send({ data: created });
+}
+
+export async function followUser(request: FastifyRequest, reply: FastifyReply) {
+  const userId = request.user?.sub;
+  if (!userId) return reply.code(401).send({ error: "Unauthorized" });
+  const targetId = (request.params as { id: string }).id;
+  if (targetId === userId) return reply.code(400).send({ error: "Cannot follow yourself" });
+
+  const existing = await prisma.userFollow.findFirst({
+    where: { followerId: userId, followingId: targetId },
+  });
+  if (existing) return reply.send({ data: existing });
+
+  const follow = await prisma.userFollow.create({
+    data: { followerId: userId, followingId: targetId },
+  });
+  return reply.code(201).send({ data: follow });
+}
+
+export async function unfollowUser(request: FastifyRequest, reply: FastifyReply) {
+  const userId = request.user?.sub;
+  if (!userId) return reply.code(401).send({ error: "Unauthorized" });
+  const targetId = (request.params as { id: string }).id;
+
+  await prisma.userFollow.deleteMany({
+    where: { followerId: userId, followingId: targetId },
+  });
+  return reply.send({ ok: true });
+}
+
+export async function listFollowers(request: FastifyRequest, reply: FastifyReply) {
+  const targetId = (request.params as { id: string }).id;
+  const followers = await prisma.userFollow.findMany({
+    where: { followingId: targetId },
+    include: { follower: { select: { id: true, profile: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  return reply.send({ data: followers });
+}
+
+export async function listFollowing(request: FastifyRequest, reply: FastifyReply) {
+  const targetId = (request.params as { id: string }).id;
+  const following = await prisma.userFollow.findMany({
+    where: { followerId: targetId },
+    include: { following: { select: { id: true, profile: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  return reply.send({ data: following });
+}
+
+export async function getPublicProfile(request: FastifyRequest, reply: FastifyReply) {
+  const id = (request.params as { id: string }).id;
+  const user = await prisma.user.findUnique({
+    where: { id },
+    include: { profile: true, reputation: true, followers: true, following: true },
+  });
+  if (!user) return reply.code(404).send({ error: "Not found" });
+
+  return reply.send({
+    data: {
+      id: user.id,
+      profile: user.profile,
+      reputation: user.reputation,
+      counts: {
+        followers: user.followers.length,
+        following: user.following.length,
+      },
+    },
+  });
 }

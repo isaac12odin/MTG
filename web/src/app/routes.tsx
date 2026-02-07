@@ -5,6 +5,7 @@ import { PublicLayout } from "./layout/PublicLayout";
 import { useAuth } from "./providers/AuthProvider";
 
 import { Login } from "../pages/auth/Login";
+import { Register } from "../pages/auth/Register";
 import { Home } from "../pages/public/Home";
 import { Dashboard } from "../pages/admin/Dashboard";
 import { Users } from "../pages/admin/Users";
@@ -22,6 +23,7 @@ import { Events } from "../pages/admin/Events";
 import { Settings } from "../pages/admin/Settings";
 import { SellerDashboard } from "../pages/seller/Dashboard";
 import { StoreDashboard } from "../pages/store/Dashboard";
+import { Account } from "../pages/account/Account";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, ready } = useAuth();
@@ -60,6 +62,14 @@ export function AppRoutes() {
         element={
           <AuthLayout>
             <Login />
+          </AuthLayout>
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          <AuthLayout>
+            <Register />
           </AuthLayout>
         }
       />
@@ -105,6 +115,14 @@ export function AppRoutes() {
             <RequireRole roles={["STORE"]}>
               <StoreDashboard />
             </RequireRole>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/account"
+        element={
+          <RequireAuth>
+            <Account />
           </RequireAuth>
         }
       />

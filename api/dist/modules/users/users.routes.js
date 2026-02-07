@@ -12,4 +12,9 @@ async function userRoutes(app) {
     app.delete("/me/addresses/:id", { preHandler: guards_1.requireAuth }, users_controller_1.deleteAddress);
     app.post("/me/addresses/:id/default", { preHandler: guards_1.requireAuth }, users_controller_1.setDefaultAddress);
     app.post("/me/verification-requests", { preHandler: guards_1.requireAuth }, users_controller_1.requestVerification);
+    app.get("/users/:id", users_controller_1.getPublicProfile);
+    app.post("/users/:id/follow", { preHandler: guards_1.requireAuth }, users_controller_1.followUser);
+    app.delete("/users/:id/follow", { preHandler: guards_1.requireAuth }, users_controller_1.unfollowUser);
+    app.get("/users/:id/followers", users_controller_1.listFollowers);
+    app.get("/users/:id/following", users_controller_1.listFollowing);
 }

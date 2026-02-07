@@ -12,6 +12,27 @@ export function setApiToken(token: string | null) {
   accessToken = token;
 }
 
+export async function apiUpload(path: string, file: File): Promise<{ assetId: string }> {
+  const form = new FormData();
+  form.append("file", file);
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    credentials: "include",
+    body: form,
+  });
+
+  if (!res.ok) {
+    const err = await safeJson(res);
+    const message = err?.error || `Upload failed (${res.status})`;
+    throw new Error(message);
+  }
+
+  const data = await safeJson(res);
+  return data?.data as { assetId: string };
+}
+
 export async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

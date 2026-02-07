@@ -3,10 +3,15 @@ import { requireAuth } from "../../security/guards";
 import {
   createAddress,
   deleteAddress,
+  followUser,
+  getPublicProfile,
   getMe,
   listAddresses,
+  listFollowers,
+  listFollowing,
   requestVerification,
   setDefaultAddress,
+  unfollowUser,
   updateAddress,
   upsertProfile,
 } from "./users.controller";
@@ -21,4 +26,10 @@ export async function userRoutes(app: FastifyInstance) {
   app.delete("/me/addresses/:id", { preHandler: requireAuth }, deleteAddress);
   app.post("/me/addresses/:id/default", { preHandler: requireAuth }, setDefaultAddress);
   app.post("/me/verification-requests", { preHandler: requireAuth }, requestVerification);
+
+  app.get("/users/:id", getPublicProfile);
+  app.post("/users/:id/follow", { preHandler: requireAuth }, followUser);
+  app.delete("/users/:id/follow", { preHandler: requireAuth }, unfollowUser);
+  app.get("/users/:id/followers", listFollowers);
+  app.get("/users/:id/following", listFollowing);
 }

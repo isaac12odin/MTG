@@ -39,9 +39,9 @@ export function Login() {
   return (
     <div>
       <div className="mb-6 space-y-2 text-center">
-        <p className="text-xs uppercase tracking-[0.4em] text-amber-400/80">Panel Seguro</p>
-        <h2 className="text-2xl font-semibold text-white">Acceso Administrador</h2>
-        <p className="text-sm text-slate-400">Solo usuarios con rol ADMIN o MOD.</p>
+        <p className="text-xs uppercase tracking-[0.4em] text-amber-400/80">Acceso</p>
+        <h2 className="text-2xl font-semibold text-white">Inicia sesión</h2>
+        <p className="text-sm text-slate-400">Accede a tu cuenta para comprar o vender.</p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -80,6 +80,12 @@ export function Login() {
         >
           {loading ? "Ingresando..." : "Entrar al panel"}
         </button>
+        <div className="text-center text-xs text-slate-400">
+          ¿No tienes cuenta?{" "}
+          <a className="text-jade-300 hover:text-jade-200" href="/register">
+            Crear cuenta
+          </a>
+        </div>
       </form>
     </div>
   );
