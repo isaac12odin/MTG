@@ -28,6 +28,7 @@ async function getMe(request, reply) {
             reputation: true,
             followers: true,
             following: true,
+            roles: true,
         },
     });
     if (!user)
@@ -47,6 +48,7 @@ async function getMe(request, reply) {
                 followers: user.followers.length,
                 following: user.following.length,
             },
+            roles: user.roles.map((r) => r.role),
         },
     });
 }

@@ -66,9 +66,21 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </>
             )}
-            <button className="rounded-full bg-jade-500 px-5 py-2 text-xs font-semibold text-ink-950 transition hover:bg-jade-400">
-              Publicar carta
-            </button>
+            {user ? (
+              <Link
+                to="/seller"
+                className="rounded-full bg-jade-500 px-5 py-2 text-xs font-semibold text-ink-950 transition hover:bg-jade-400"
+              >
+                Publicar carta
+              </Link>
+            ) : (
+              <Link
+                to="/register"
+                className="rounded-full bg-jade-500 px-5 py-2 text-xs font-semibold text-ink-950 transition hover:bg-jade-400"
+              >
+                Publicar carta
+              </Link>
+            )}
           </div>
 
           <button
@@ -110,9 +122,15 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   </Link>
                 </>
               )}
-              <button className="rounded-xl bg-jade-500 px-4 py-2 text-xs font-semibold text-ink-950">
-                Publicar carta
-              </button>
+              {user ? (
+                <Link to="/seller" className="rounded-xl bg-jade-500 px-4 py-2 text-xs font-semibold text-ink-950">
+                  Publicar carta
+                </Link>
+              ) : (
+                <Link to="/register" className="rounded-xl bg-jade-500 px-4 py-2 text-xs font-semibold text-ink-950">
+                  Publicar carta
+                </Link>
+              )}
             </div>
           </div>
         )}

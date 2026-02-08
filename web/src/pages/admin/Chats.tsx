@@ -9,6 +9,8 @@ type Conversation = {
   userBId: string;
   listingId?: string | null;
   updatedAt: string;
+  userA?: { id: string; profile?: { displayName?: string | null } | null } | null;
+  userB?: { id: string; profile?: { displayName?: string | null } | null } | null;
   messages?: { id: string; text: string; createdAt: string }[];
 };
 
@@ -20,10 +22,18 @@ type Message = {
   createdAt: string;
 };
 
+type ActiveUserRow = {
+  userId: string;
+  connections: number;
+  joinedConversations: number;
+  displayName?: string;
+  roles?: string[];
+};
+
 type ChatStats = {
   totalConnections: number;
   users: number;
-  perUser: { userId: string; connections: number; joinedConversations: number }[];
+  perUser: ActiveUserRow[];
 };
 
 export function Chats() {
@@ -41,10 +51,22 @@ export function Chats() {
     [conversations, selectedId]
   );
 
+  const labelForConv = (conv: Conversation) => {
+    const a = conv.userA?.profile?.displayName ?? conv.userAId.slice(0, 6);
+    const b = conv.userB?.profile?.displayName ?? conv.userBId.slice(0, 6);
+    return `${a} ↔ ${b}`;
+  };
+
   useEffect(() => {
     apiFetch<{ data: Conversation[] }>("/conversations")
       .then((res) => setConversations(res.data))
       .catch(() => setConversations([]));
+  }, []);
+
+  useEffect(() => {
+    apiFetch<{ data: ChatStats }>("/admin/chat/active-users")
+      .then((res) => setStats(res.data))
+      .catch(() => setStats(null));
   }, []);
 
   useEffect(() => {
@@ -53,12 +75,6 @@ export function Chats() {
       .then((res) => setMessages(res.data.slice().reverse()))
       .catch(() => setMessages([]));
   }, [selectedId]);
-
-  useEffect(() => {
-    apiFetch<{ data: ChatStats }>("/moderation/chat/active")
-      .then((res) => setStats(res.data))
-      .catch(() => setStats(null));
-  }, []);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -101,11 +117,11 @@ export function Chats() {
     setText("");
   };
 
-  const handleStartConversation = async () => {
-    if (!userIdToStart.trim()) return;
+  const handleStartConversation = async (targetId: string) => {
+    if (!targetId.trim()) return;
     const res = await apiFetch<{ data: Conversation }>("/conversations", {
       method: "POST",
-      body: { userId: userIdToStart.trim() },
+      body: { userId: targetId.trim() },
     });
     setConversations((prev) => [res.data, ...prev.filter((c) => c.id !== res.data.id)]);
     setSelectedId(res.data.id);
@@ -142,7 +158,7 @@ export function Chats() {
               />
               <button
                 className="rounded-xl bg-jade-500 px-3 py-2 text-xs font-semibold text-ink-950"
-                onClick={handleStartConversation}
+                onClick={() => handleStartConversation(userIdToStart)}
               >
                 Iniciar
               </button>
@@ -150,7 +166,38 @@ export function Chats() {
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Conversaciones</p>
+            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Usuarios activos</p>
+            <div className="space-y-2">
+              {stats?.perUser?.length ? (
+                stats.perUser.map((u) => (
+                  <div
+                    key={u.userId}
+                    className="flex items-center justify-between gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-white">{u.displayName ?? u.userId.slice(0, 6)}</p>
+                      <p className="text-[11px] text-slate-400">
+                        conexiones: {u.connections} • chats: {u.joinedConversations}
+                      </p>
+                    </div>
+                    <button
+                      className="rounded-full border border-white/20 px-3 py-1 text-[11px]"
+                      onClick={() => handleStartConversation(u.userId)}
+                    >
+                      Abrir
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-4 text-xs text-slate-400">
+                  Sin usuarios activos.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Mis conversaciones</p>
             <div className="space-y-2">
               {conversations.map((conv) => (
                 <button
@@ -162,7 +209,7 @@ export function Chats() {
                   }`}
                   onClick={() => setSelectedId(conv.id)}
                 >
-                  <div className="font-semibold text-white">{conv.id.slice(0, 8)}...</div>
+                  <div className="font-semibold text-white">{labelForConv(conv)}</div>
                   <div className="mt-1 text-[11px] text-slate-400">
                     {new Date(conv.updatedAt).toLocaleString()}
                   </div>
@@ -181,7 +228,7 @@ export function Chats() {
           <div className="border-b border-white/10 pb-4">
             <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Chat activo</p>
             <h3 className="text-lg font-semibold text-white">
-              {selectedConversation ? selectedConversation.id : "Selecciona una conversación"}
+              {selectedConversation ? labelForConv(selectedConversation) : "Selecciona una conversación"}
             </h3>
           </div>
 

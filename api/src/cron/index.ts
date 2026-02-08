@@ -5,6 +5,7 @@ import {
   expireTradeOffers,
   cleanupExpiredMessages,
   cleanupExpiredMedia,
+  cleanupPendingRegistrations,
   expireMensualidades,
   autoRelistUnpaidAuctions,
   recalcReputation,
@@ -37,6 +38,7 @@ export function startCron() {
   cron.schedule("*/10 * * * *", wrapJob("expire-offers", expireTradeOffers));
   cron.schedule("*/10 * * * *", wrapJob("cleanup-messages", cleanupExpiredMessages));
   cron.schedule("*/30 * * * *", wrapJob("cleanup-media", cleanupExpiredMedia));
+  cron.schedule("*/1 * * * *", wrapJob("cleanup-pending", cleanupPendingRegistrations));
   cron.schedule("0 * * * *", wrapJob("mensualidades-expire", expireMensualidades));
   cron.schedule("0 3 * * *", wrapJob("recalc-reputation", recalcReputation));
 }

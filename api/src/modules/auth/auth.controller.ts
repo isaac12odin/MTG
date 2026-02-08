@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import argon2 from "argon2";
+import { Prisma, Role } from "@prisma/client";
 
 import { prisma } from "../../db";
 import { prepareEmail, preparePhone } from "../../security/pii";
@@ -16,6 +17,7 @@ import {
   LOCKOUT_MINUTES,
   MAX_FAILED_LOGINS,
   OTP_TTL_MINUTES,
+  PENDING_REG_TTL_MINUTES,
   REFRESH_COOKIE,
   RegisterSchema,
   LoginSchema,
@@ -94,24 +96,118 @@ export async function register(request: FastifyRequest, reply: FastifyReply) {
   const { emailEnc, emailHash } = prepareEmail(body.email);
   const { phoneEnc, phoneHash } = preparePhone(body.phone ?? null);
 
-  const existing = await prisma.user.findUnique({ where: { emailHash } });
-  if (existing) {
-    return reply.code(409).send({ error: "Email already registered" });
+  const emailUser = await prisma.user.findUnique({
+    where: { emailHash },
+    include: { security: true },
+  });
+  const phoneUser = phoneHash
+    ? await prisma.user.findUnique({
+        where: { phoneHash },
+        include: { security: true },
+      })
+    : null;
+
+  const cutoff = new Date(Date.now() - PENDING_REG_TTL_MINUTES * 60 * 1000);
+  const isStale = (u?: { createdAt: Date; security?: { emailVerifiedAt: Date | null } | null }) =>
+    !!u && !u.security?.emailVerifiedAt && u.createdAt < cutoff;
+
+  if (emailUser && phoneUser && emailUser.id !== phoneUser.id) {
+    if (emailUser.security?.emailVerifiedAt || phoneUser.security?.emailVerifiedAt) {
+      return reply.code(409).send({ error: "Email or phone already registered" });
+    }
+    if (isStale(emailUser) && isStale(phoneUser)) {
+      await prisma.user.deleteMany({ where: { id: { in: [emailUser.id, phoneUser.id] } } });
+    } else {
+      return reply.code(429).send({
+        error: `Registro en proceso. Intenta de nuevo en ${PENDING_REG_TTL_MINUTES} minutos`,
+      });
+    }
+  } else {
+    const existing = emailUser ?? phoneUser;
+    if (existing) {
+      if (existing.security?.emailVerifiedAt) {
+        return reply.code(409).send({ error: "Email or phone already registered" });
+      }
+      if (isStale(existing)) {
+        await prisma.user.delete({ where: { id: existing.id } });
+      } else {
+        return reply.code(429).send({
+          error: `Registro en proceso. Intenta de nuevo en ${PENDING_REG_TTL_MINUTES} minutos`,
+        });
+      }
+    }
   }
 
   const passwordHash = await argon2.hash(body.password, { type: argon2.argon2id });
+  const accountType = body.accountType ?? "BUYER";
+  const roles: Role[] = [];
+  if (accountType === "BUYER") roles.push("BUYER");
+  if (accountType === "SELLER") roles.push("BUYER", "SELLER");
+  if (accountType === "STORE") roles.push("BUYER", "STORE");
 
-  const user = await prisma.user.create({
-    data: {
-      emailEnc,
-      emailHash,
-      phoneEnc,
-      phoneHash,
-      passwordHash,
-      roles: { create: [{ role: "BUYER" }, { role: "SELLER" }] },
-      security: { create: {} },
-    },
-  });
+  const createUser = () =>
+    prisma.user.create({
+      data: {
+        emailEnc,
+        emailHash,
+        phoneEnc,
+        phoneHash,
+        passwordHash,
+        roles: { create: roles.map((role) => ({ role })) },
+        security: { create: {} },
+      },
+    });
+
+  let user;
+  try {
+    user = await createUser();
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      const latestEmailUser = await prisma.user.findUnique({
+        where: { emailHash },
+        include: { security: true },
+      });
+      const latestPhoneUser = phoneHash
+        ? await prisma.user.findUnique({
+            where: { phoneHash },
+            include: { security: true },
+          })
+        : null;
+
+      if (latestEmailUser && latestPhoneUser && latestEmailUser.id !== latestPhoneUser.id) {
+        if (latestEmailUser.security?.emailVerifiedAt || latestPhoneUser.security?.emailVerifiedAt) {
+          return reply.code(409).send({ error: "Email or phone already registered" });
+        }
+        if (isStale(latestEmailUser) && isStale(latestPhoneUser)) {
+          await prisma.user.deleteMany({
+            where: { id: { in: [latestEmailUser.id, latestPhoneUser.id] } },
+          });
+        } else {
+          return reply.code(429).send({
+            error: `Registro en proceso. Intenta de nuevo en ${PENDING_REG_TTL_MINUTES} minutos`,
+          });
+        }
+      } else {
+        const existing = latestEmailUser ?? latestPhoneUser;
+        if (existing) {
+          if (existing.security?.emailVerifiedAt) {
+            return reply.code(409).send({ error: "Email or phone already registered" });
+          }
+          if (isStale(existing)) {
+            await prisma.user.delete({ where: { id: existing.id } });
+          } else {
+            return reply.code(429).send({
+              error: `Registro en proceso. Intenta de nuevo en ${PENDING_REG_TTL_MINUTES} minutos`,
+            });
+          }
+        }
+      }
+
+      user = await createUser();
+    } else {
+      throw err;
+    }
+  }
 
   await createEmailOtp(user.id, emailEnc, body.email);
 
@@ -224,7 +320,7 @@ export async function login(request: FastifyRequest, reply: FastifyReply) {
 }
 
 export async function refresh(request: FastifyRequest, reply: FastifyReply) {
-  RefreshSchema.parse(request.body);
+  RefreshSchema.parse(request.body ?? {});
   const token = request.cookies[REFRESH_COOKIE];
   if (!token) return reply.code(401).send({ error: "Missing refresh token" });
 
@@ -278,7 +374,7 @@ export async function refresh(request: FastifyRequest, reply: FastifyReply) {
 }
 
 export async function logout(request: FastifyRequest, reply: FastifyReply) {
-  LogoutSchema.parse(request.body);
+  LogoutSchema.parse(request.body ?? {});
   const refreshToken = request.cookies[REFRESH_COOKIE];
   if (refreshToken) {
     try {

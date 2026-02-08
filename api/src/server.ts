@@ -7,6 +7,8 @@ import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
 import { ZodError } from "zod";
+import path from "path";
+import fs from "fs";
 
 import { authRoutes } from "./modules/auth/auth.routes";
 import { moderationRoutes } from "./modules/moderation/moderation.routes";
@@ -49,6 +51,23 @@ async function start() {
   await app.register(rateLimit, {
     max: 200,
     timeWindow: "10 minute",
+  });
+
+  app.get("/uploads/*", async (request, reply) => {
+    const rel = (request.params as { "*": string })["*"];
+    const baseDir = path.resolve(process.cwd(), process.env.UPLOAD_DIR ?? "uploads");
+    const resolved = path.resolve(baseDir, rel);
+    if (!resolved.startsWith(baseDir)) {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+    if (!fs.existsSync(resolved)) {
+      return reply.code(404).send({ error: "Not found" });
+    }
+    const ext = path.extname(resolved).toLowerCase();
+    if (ext === ".webp") reply.type("image/webp");
+    if (ext === ".jpg" || ext === ".jpeg") reply.type("image/jpeg");
+    if (ext === ".png") reply.type("image/png");
+    return reply.send(fs.createReadStream(resolved));
   });
 
   app.setErrorHandler((err, _request, reply) => {

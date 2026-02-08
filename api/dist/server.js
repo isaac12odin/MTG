@@ -12,6 +12,8 @@ const rate_limit_1 = __importDefault(require("@fastify/rate-limit"));
 const multipart_1 = __importDefault(require("@fastify/multipart"));
 const websocket_1 = __importDefault(require("@fastify/websocket"));
 const zod_1 = require("zod");
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const auth_routes_1 = require("./modules/auth/auth.routes");
 const moderation_routes_1 = require("./modules/moderation/moderation.routes");
 const listings_routes_1 = require("./modules/listings/listings.routes");
@@ -50,6 +52,25 @@ async function start() {
     await app.register(rate_limit_1.default, {
         max: 200,
         timeWindow: "10 minute",
+    });
+    app.get("/uploads/*", async (request, reply) => {
+        const rel = request.params["*"];
+        const baseDir = path_1.default.resolve(process.cwd(), process.env.UPLOAD_DIR ?? "uploads");
+        const resolved = path_1.default.resolve(baseDir, rel);
+        if (!resolved.startsWith(baseDir)) {
+            return reply.code(403).send({ error: "Forbidden" });
+        }
+        if (!fs_1.default.existsSync(resolved)) {
+            return reply.code(404).send({ error: "Not found" });
+        }
+        const ext = path_1.default.extname(resolved).toLowerCase();
+        if (ext === ".webp")
+            reply.type("image/webp");
+        if (ext === ".jpg" || ext === ".jpeg")
+            reply.type("image/jpeg");
+        if (ext === ".png")
+            reply.type("image/png");
+        return reply.send(fs_1.default.createReadStream(resolved));
     });
     app.setErrorHandler((err, _request, reply) => {
         if (err instanceof zod_1.ZodError) {

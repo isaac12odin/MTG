@@ -7,6 +7,7 @@ import { useAuth } from "./providers/AuthProvider";
 import { Login } from "../pages/auth/Login";
 import { Register } from "../pages/auth/Register";
 import { Home } from "../pages/public/Home";
+import { ListingDetail } from "../pages/public/ListingDetail";
 import { Dashboard } from "../pages/admin/Dashboard";
 import { Users } from "../pages/admin/Users";
 import { Listings } from "../pages/admin/Listings";
@@ -24,6 +25,7 @@ import { Settings } from "../pages/admin/Settings";
 import { SellerDashboard } from "../pages/seller/Dashboard";
 import { StoreDashboard } from "../pages/store/Dashboard";
 import { Account } from "../pages/account/Account";
+import { Messages } from "../pages/user/Messages";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, ready } = useAuth();
@@ -54,6 +56,14 @@ export function AppRoutes() {
         element={
           <PublicLayout>
             <Home />
+          </PublicLayout>
+        }
+      />
+      <Route
+        path="/listing/:id"
+        element={
+          <PublicLayout>
+            <ListingDetail />
           </PublicLayout>
         }
       />
@@ -123,6 +133,14 @@ export function AppRoutes() {
         element={
           <RequireAuth>
             <Account />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/messages"
+        element={
+          <RequireAuth>
+            <Messages />
           </RequireAuth>
         }
       />

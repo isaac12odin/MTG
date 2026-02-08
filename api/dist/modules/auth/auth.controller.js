@@ -12,6 +12,7 @@ exports.logout = logout;
 exports.listSessions = listSessions;
 exports.deleteSession = deleteSession;
 const argon2_1 = __importDefault(require("argon2"));
+const client_1 = require("@prisma/client");
 const db_1 = require("../../db");
 const pii_1 = require("../../security/pii");
 const hash_1 = require("../../security/hash");
@@ -74,22 +75,120 @@ async function register(request, reply) {
     const body = auth_model_1.RegisterSchema.parse(request.body);
     const { emailEnc, emailHash } = (0, pii_1.prepareEmail)(body.email);
     const { phoneEnc, phoneHash } = (0, pii_1.preparePhone)(body.phone ?? null);
-    const existing = await db_1.prisma.user.findUnique({ where: { emailHash } });
-    if (existing) {
-        return reply.code(409).send({ error: "Email already registered" });
+    const emailUser = await db_1.prisma.user.findUnique({
+        where: { emailHash },
+        include: { security: true },
+    });
+    const phoneUser = phoneHash
+        ? await db_1.prisma.user.findUnique({
+            where: { phoneHash },
+            include: { security: true },
+        })
+        : null;
+    const cutoff = new Date(Date.now() - auth_model_1.PENDING_REG_TTL_MINUTES * 60 * 1000);
+    const isStale = (u) => !!u && !u.security?.emailVerifiedAt && u.createdAt < cutoff;
+    if (emailUser && phoneUser && emailUser.id !== phoneUser.id) {
+        if (emailUser.security?.emailVerifiedAt || phoneUser.security?.emailVerifiedAt) {
+            return reply.code(409).send({ error: "Email or phone already registered" });
+        }
+        if (isStale(emailUser) && isStale(phoneUser)) {
+            await db_1.prisma.user.deleteMany({ where: { id: { in: [emailUser.id, phoneUser.id] } } });
+        }
+        else {
+            return reply.code(429).send({
+                error: `Registro en proceso. Intenta de nuevo en ${auth_model_1.PENDING_REG_TTL_MINUTES} minutos`,
+            });
+        }
+    }
+    else {
+        const existing = emailUser ?? phoneUser;
+        if (existing) {
+            if (existing.security?.emailVerifiedAt) {
+                return reply.code(409).send({ error: "Email or phone already registered" });
+            }
+            if (isStale(existing)) {
+                await db_1.prisma.user.delete({ where: { id: existing.id } });
+            }
+            else {
+                return reply.code(429).send({
+                    error: `Registro en proceso. Intenta de nuevo en ${auth_model_1.PENDING_REG_TTL_MINUTES} minutos`,
+                });
+            }
+        }
     }
     const passwordHash = await argon2_1.default.hash(body.password, { type: argon2_1.default.argon2id });
-    const user = await db_1.prisma.user.create({
+    const accountType = body.accountType ?? "BUYER";
+    const roles = [];
+    if (accountType === "BUYER")
+        roles.push("BUYER");
+    if (accountType === "SELLER")
+        roles.push("BUYER", "SELLER");
+    if (accountType === "STORE")
+        roles.push("BUYER", "STORE");
+    const createUser = () => db_1.prisma.user.create({
         data: {
             emailEnc,
             emailHash,
             phoneEnc,
             phoneHash,
             passwordHash,
-            roles: { create: [{ role: "BUYER" }, { role: "SELLER" }] },
+            roles: { create: roles.map((role) => ({ role })) },
             security: { create: {} },
         },
     });
+    let user;
+    try {
+        user = await createUser();
+    }
+    catch (err) {
+        if (err instanceof client_1.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+            const latestEmailUser = await db_1.prisma.user.findUnique({
+                where: { emailHash },
+                include: { security: true },
+            });
+            const latestPhoneUser = phoneHash
+                ? await db_1.prisma.user.findUnique({
+                    where: { phoneHash },
+                    include: { security: true },
+                })
+                : null;
+            if (latestEmailUser && latestPhoneUser && latestEmailUser.id !== latestPhoneUser.id) {
+                if (latestEmailUser.security?.emailVerifiedAt || latestPhoneUser.security?.emailVerifiedAt) {
+                    return reply.code(409).send({ error: "Email or phone already registered" });
+                }
+                if (isStale(latestEmailUser) && isStale(latestPhoneUser)) {
+                    await db_1.prisma.user.deleteMany({
+                        where: { id: { in: [latestEmailUser.id, latestPhoneUser.id] } },
+                    });
+                }
+                else {
+                    return reply.code(429).send({
+                        error: `Registro en proceso. Intenta de nuevo en ${auth_model_1.PENDING_REG_TTL_MINUTES} minutos`,
+                    });
+                }
+            }
+            else {
+                const existing = latestEmailUser ?? latestPhoneUser;
+                if (existing) {
+                    if (existing.security?.emailVerifiedAt) {
+                        return reply.code(409).send({ error: "Email or phone already registered" });
+                    }
+                    if (isStale(existing)) {
+                        await db_1.prisma.user.delete({ where: { id: existing.id } });
+                    }
+                    else {
+                        return reply.code(429).send({
+                            error: `Registro en proceso. Intenta de nuevo en ${auth_model_1.PENDING_REG_TTL_MINUTES} minutos`,
+                        });
+                    }
+                }
+            }
+            user = await createUser();
+        }
+        else {
+            throw err;
+        }
+    }
     await createEmailOtp(user.id, emailEnc, body.email);
     return reply.code(201).send({ userId: user.id, verificationRequired: true });
 }
@@ -184,7 +283,7 @@ async function login(request, reply) {
     return reply.send({ accessToken: access.token, expiresInMinutes: access.expiresInMinutes });
 }
 async function refresh(request, reply) {
-    auth_model_1.RefreshSchema.parse(request.body);
+    auth_model_1.RefreshSchema.parse(request.body ?? {});
     const token = request.cookies[auth_model_1.REFRESH_COOKIE];
     if (!token)
         return reply.code(401).send({ error: "Missing refresh token" });
@@ -232,7 +331,7 @@ async function refresh(request, reply) {
     return reply.send({ accessToken: access.token, expiresInMinutes: access.expiresInMinutes });
 }
 async function logout(request, reply) {
-    auth_model_1.LogoutSchema.parse(request.body);
+    auth_model_1.LogoutSchema.parse(request.body ?? {});
     const refreshToken = request.cookies[auth_model_1.REFRESH_COOKIE];
     if (refreshToken) {
         try {

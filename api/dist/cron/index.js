@@ -34,6 +34,7 @@ function startCron() {
     node_cron_1.default.schedule("*/10 * * * *", wrapJob("expire-offers", jobs_1.expireTradeOffers));
     node_cron_1.default.schedule("*/10 * * * *", wrapJob("cleanup-messages", jobs_1.cleanupExpiredMessages));
     node_cron_1.default.schedule("*/30 * * * *", wrapJob("cleanup-media", jobs_1.cleanupExpiredMedia));
+    node_cron_1.default.schedule("*/1 * * * *", wrapJob("cleanup-pending", jobs_1.cleanupPendingRegistrations));
     node_cron_1.default.schedule("0 * * * *", wrapJob("mensualidades-expire", jobs_1.expireMensualidades));
     node_cron_1.default.schedule("0 3 * * *", wrapJob("recalc-reputation", jobs_1.recalcReputation));
 }

@@ -1,14 +1,17 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.REFRESH_COOKIE = exports.ACCESS_TTL_MINUTES = exports.LOCKOUT_MINUTES = exports.MAX_FAILED_LOGINS = exports.OTP_TTL_MINUTES = exports.LogoutSchema = exports.RefreshSchema = exports.ResendSchema = exports.VerifyEmailSchema = exports.LoginSchema = exports.RegisterSchema = exports.PASSWORD_MIN = void 0;
+exports.REFRESH_COOKIE = exports.ACCESS_TTL_MINUTES = exports.LOCKOUT_MINUTES = exports.MAX_FAILED_LOGINS = exports.OTP_TTL_MINUTES = exports.LogoutSchema = exports.RefreshSchema = exports.ResendSchema = exports.VerifyEmailSchema = exports.LoginSchema = exports.RegisterSchema = exports.AccountType = exports.PENDING_REG_TTL_MINUTES = exports.PASSWORD_MIN = void 0;
 exports.cookieOptions = cookieOptions;
 exports.getIp = getIp;
 const zod_1 = require("zod");
 exports.PASSWORD_MIN = Number(process.env.PASSWORD_MIN ?? 8);
+exports.PENDING_REG_TTL_MINUTES = Number(process.env.PENDING_REG_TTL_MINUTES ?? 3);
+exports.AccountType = zod_1.z.enum(["BUYER", "SELLER", "STORE"]);
 exports.RegisterSchema = zod_1.z.object({
     email: zod_1.z.string().email(),
     password: zod_1.z.string().min(exports.PASSWORD_MIN),
     phone: zod_1.z.string().optional().nullable(),
+    accountType: exports.AccountType.optional(),
 });
 exports.LoginSchema = zod_1.z.object({
     email: zod_1.z.string().email(),
@@ -31,12 +34,13 @@ exports.REFRESH_COOKIE = process.env.REFRESH_COOKIE_NAME ?? "rt";
 const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN;
 const IS_PROD = process.env.NODE_ENV === "production";
 function cookieOptions(maxAgeSeconds) {
+    const domain = COOKIE_DOMAIN?.trim();
     return {
         httpOnly: true,
         secure: IS_PROD,
-        sameSite: "strict",
-        path: "/auth",
-        domain: COOKIE_DOMAIN,
+        sameSite: (IS_PROD ? "strict" : "lax"),
+        path: "/",
+        ...(domain ? { domain } : {}),
         maxAge: maxAgeSeconds,
     };
 }

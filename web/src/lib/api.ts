@@ -35,7 +35,6 @@ export async function apiUpload(path: string, file: File): Promise<{ assetId: st
 
 export async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...(options.headers ?? {}),
   };
 
@@ -43,11 +42,15 @@ export async function apiFetch<T = unknown>(path: string, options: ApiOptions = 
     headers.Authorization = `Bearer ${accessToken}`;
   }
 
+  if (options.body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     method: options.method ?? "GET",
     headers,
     credentials: "include",
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
 
   if (!res.ok) {

@@ -5,6 +5,7 @@ const prismaAny = prisma as any;
 const DEFAULT_AUCTION_RELIST_DELAY_MIN = Number(
   process.env.DEFAULT_AUCTION_RELIST_DELAY_MIN ?? 10
 );
+const PENDING_REG_TTL_MINUTES = Number(process.env.PENDING_REG_TTL_MINUTES ?? 3);
 
 function minutesToMs(minutes: number) {
   return minutes * 60 * 1000;
@@ -101,6 +102,16 @@ export async function cleanupExpiredMedia() {
   await prisma.mediaAsset.deleteMany({
     where: {
       expiresAt: { lte: now },
+    },
+  });
+}
+
+export async function cleanupPendingRegistrations() {
+  const cutoff = new Date(Date.now() - PENDING_REG_TTL_MINUTES * 60 * 1000);
+  await prisma.user.deleteMany({
+    where: {
+      createdAt: { lt: cutoff },
+      OR: [{ security: { is: { emailVerifiedAt: null } } }, { security: { is: null } }],
     },
   });
 }

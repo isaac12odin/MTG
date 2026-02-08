@@ -13,6 +13,8 @@ export async function listConversations(request: FastifyRequest, reply: FastifyR
   const conversations = await prisma.conversation.findMany({
     where: { OR: [{ userAId: userId }, { userBId: userId }] },
     include: {
+      userA: { select: { id: true, profile: true } },
+      userB: { select: { id: true, profile: true } },
       listing: true,
       messages: { orderBy: { createdAt: "desc" }, take: 1 },
     },

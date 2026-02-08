@@ -8,6 +8,7 @@ export function Register() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [accountType, setAccountType] = useState<"BUYER" | "SELLER" | "STORE">("BUYER");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -23,7 +24,7 @@ export function Register() {
     try {
       await apiFetch("/auth/register", {
         method: "POST",
-        body: { email, password, phone: phone || null },
+        body: { email, password, phone: phone || null, accountType },
       });
       setStep("verify");
     } catch (err) {
@@ -91,6 +92,21 @@ export function Register() {
               onChange={(e) => setPhone(e.target.value)}
               placeholder="Opcional"
             />
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-[0.3em] text-slate-400">Tipo de cuenta</label>
+            <select
+              className="mt-2 w-full rounded-2xl border border-white/10 bg-ink-950/60 px-4 py-3 text-sm text-white focus:border-jade-400 focus:outline-none"
+              value={accountType}
+              onChange={(e) => setAccountType(e.target.value as "BUYER" | "SELLER" | "STORE")}
+            >
+              <option value="BUYER">Comprador</option>
+              <option value="SELLER">Vendedor</option>
+              <option value="STORE">Tienda</option>
+            </select>
+            <p className="mt-2 text-xs text-slate-500">
+              Puedes cambiar o ampliar permisos después desde tu perfil.
+            </p>
           </div>
           <div>
             <label className="text-xs uppercase tracking-[0.3em] text-slate-400">Password</label>

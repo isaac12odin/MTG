@@ -6,6 +6,7 @@ type UserMe = {
   profile?: { displayName?: string | null; bio?: string | null; city?: string | null; country?: string | null } | null;
   counts?: { followers: number; following: number };
   security?: { emailVerifiedAt?: string | null; manualVerifiedAt?: string | null } | null;
+  roles?: string[];
 };
 
 type Address = {
@@ -126,6 +127,24 @@ export function Account() {
             <p className="mt-4 text-xs text-slate-500">
               Próximamente: lista de seguidores y opciones para seguir usuarios.
             </p>
+          </section>
+          <section className="rounded-3xl border border-white/10 bg-ink-900/60 p-6">
+            <h3 className="text-lg font-semibold text-white">Accesos</h3>
+            <p className="mt-2 text-sm text-slate-400">Roles: {(me?.roles ?? []).join(", ") || "—"}</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <a
+                href="/messages"
+                className="rounded-full border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/80"
+              >
+                Mensajes
+              </a>
+              <a
+                href="/seller"
+                className="rounded-full border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/80"
+              >
+                Panel vendedor
+              </a>
+            </div>
           </section>
         </div>
 

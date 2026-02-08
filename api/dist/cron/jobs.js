@@ -5,12 +5,14 @@ exports.closeEndedAuctions = closeEndedAuctions;
 exports.expireTradeOffers = expireTradeOffers;
 exports.cleanupExpiredMessages = cleanupExpiredMessages;
 exports.cleanupExpiredMedia = cleanupExpiredMedia;
+exports.cleanupPendingRegistrations = cleanupPendingRegistrations;
 exports.expireMensualidades = expireMensualidades;
 exports.autoRelistUnpaidAuctions = autoRelistUnpaidAuctions;
 exports.recalcReputation = recalcReputation;
 const db_1 = require("../db");
 const prismaAny = db_1.prisma;
 const DEFAULT_AUCTION_RELIST_DELAY_MIN = Number(process.env.DEFAULT_AUCTION_RELIST_DELAY_MIN ?? 10);
+const PENDING_REG_TTL_MINUTES = Number(process.env.PENDING_REG_TTL_MINUTES ?? 3);
 function minutesToMs(minutes) {
     return minutes * 60 * 1000;
 }
@@ -97,6 +99,15 @@ async function cleanupExpiredMedia() {
     await db_1.prisma.mediaAsset.deleteMany({
         where: {
             expiresAt: { lte: now },
+        },
+    });
+}
+async function cleanupPendingRegistrations() {
+    const cutoff = new Date(Date.now() - PENDING_REG_TTL_MINUTES * 60 * 1000);
+    await db_1.prisma.user.deleteMany({
+        where: {
+            createdAt: { lt: cutoff },
+            OR: [{ security: { is: { emailVerifiedAt: null } } }, { security: { is: null } }],
         },
     });
 }

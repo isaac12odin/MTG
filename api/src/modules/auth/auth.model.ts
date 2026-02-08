@@ -2,11 +2,15 @@ import { z } from "zod";
 import type { FastifyRequest } from "fastify";
 
 export const PASSWORD_MIN = Number(process.env.PASSWORD_MIN ?? 8);
+export const PENDING_REG_TTL_MINUTES = Number(process.env.PENDING_REG_TTL_MINUTES ?? 3);
+
+export const AccountType = z.enum(["BUYER", "SELLER", "STORE"]);
 
 export const RegisterSchema = z.object({
   email: z.string().email(),
   password: z.string().min(PASSWORD_MIN),
   phone: z.string().optional().nullable(),
+  accountType: AccountType.optional(),
 });
 
 export const LoginSchema = z.object({
@@ -36,12 +40,13 @@ const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN;
 const IS_PROD = process.env.NODE_ENV === "production";
 
 export function cookieOptions(maxAgeSeconds?: number) {
+  const domain = COOKIE_DOMAIN?.trim();
   return {
     httpOnly: true,
     secure: IS_PROD,
-    sameSite: "strict" as const,
-    path: "/auth",
-    domain: COOKIE_DOMAIN,
+    sameSite: (IS_PROD ? "strict" : "lax") as "strict" | "lax",
+    path: "/",
+    ...(domain ? { domain } : {}),
     maxAge: maxAgeSeconds,
   };
 }
