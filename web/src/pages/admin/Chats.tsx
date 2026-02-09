@@ -37,7 +37,7 @@ type ChatStats = {
 };
 
 export function Chats() {
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -233,17 +233,25 @@ export function Chats() {
           </div>
 
           <div className="flex-1 space-y-3 overflow-y-auto py-6">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200"
-              >
-                <div className="text-[10px] uppercase tracking-[0.3em] text-slate-500">
-                  {msg.senderId.slice(0, 6)} • {new Date(msg.createdAt).toLocaleString()}
+            {messages.map((msg) => {
+              const isMine = msg.senderId === user?.id;
+              return (
+                <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={`max-w-[75%] rounded-3xl border px-4 py-3 text-sm ${
+                      isMine
+                        ? "border-jade-400/40 bg-jade-500/20 text-jade-50"
+                        : "border-white/10 bg-white/5 text-slate-100"
+                    }`}
+                  >
+                    <div className="text-[10px] uppercase tracking-[0.3em] text-slate-500">
+                      {msg.senderId.slice(0, 6)} • {new Date(msg.createdAt).toLocaleString()}
+                    </div>
+                    <div className="mt-2 text-sm leading-relaxed">{msg.text}</div>
+                  </div>
                 </div>
-                <div className="mt-2 text-sm text-slate-100">{msg.text}</div>
-              </div>
-            ))}
+              );
+            })}
             {!messages.length && (
               <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 px-4 py-6 text-sm text-slate-400">
                 No hay mensajes en esta conversación.

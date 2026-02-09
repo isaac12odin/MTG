@@ -24,6 +24,7 @@ const chat_routes_1 = require("./modules/chat/chat.routes");
 const reviews_routes_1 = require("./modules/reviews/reviews.routes");
 const media_routes_1 = require("./modules/media/media.routes");
 const users_routes_1 = require("./modules/users/users.routes");
+const plans_routes_1 = require("./modules/plans/plans.routes");
 const admin_routes_1 = require("./modules/admin/admin.routes");
 const db_1 = require("./db");
 const cron_1 = require("./cron");
@@ -90,6 +91,7 @@ async function start() {
     await app.register(reviews_routes_1.reviewRoutes);
     await app.register(media_routes_1.mediaRoutes);
     await app.register(users_routes_1.userRoutes);
+    await app.register(plans_routes_1.plansRoutes);
     await app.register(admin_routes_1.adminRoutes);
     const port = Number(process.env.PORT ?? 3000);
     const host = process.env.HOST ?? "0.0.0.0";

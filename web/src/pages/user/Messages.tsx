@@ -7,6 +7,8 @@ import { PageHeader } from "../../components/ui/PageHeader";
 type Conversation = {
   id: string;
   updatedAt: string;
+  userA?: { id: string; profile?: { displayName?: string | null } | null } | null;
+  userB?: { id: string; profile?: { displayName?: string | null } | null } | null;
 };
 
 type Message = {
@@ -18,13 +20,23 @@ type Message = {
 };
 
 export function Messages() {
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
   const [params] = useSearchParams();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(params.get("conversationId"));
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const wsRef = useRef<WebSocket | null>(null);
+
+  const labelForConv = (conv: Conversation) => {
+    const other =
+      conv.userA?.id === user?.id
+        ? conv.userB
+        : conv.userB?.id === user?.id
+        ? conv.userA
+        : conv.userA ?? conv.userB;
+    return other?.profile?.displayName ?? other?.id?.slice(0, 8) ?? conv.id.slice(0, 8);
+  };
 
   useEffect(() => {
     apiFetch<{ data: Conversation[] }>("/conversations")
@@ -84,6 +96,23 @@ export function Messages() {
         <PageHeader title="Mensajes" subtitle="Tus conversaciones con vendedores y compradores." />
         <div className="grid gap-6 lg:grid-cols-[320px,1fr]">
           <div className="rounded-3xl border border-white/10 bg-ink-900/60 p-4">
+            <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-slate-300">
+              <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Acciones rápidas</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <a
+                  href="/seller"
+                  className="rounded-full border border-white/20 px-3 py-1 text-[11px] uppercase tracking-[0.2em]"
+                >
+                  Panel vendedor
+                </a>
+                <a
+                  href="/account"
+                  className="rounded-full border border-white/20 px-3 py-1 text-[11px] uppercase tracking-[0.2em]"
+                >
+                  Mi cuenta
+                </a>
+              </div>
+            </div>
             <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Conversaciones</p>
             <div className="mt-3 space-y-2">
               {conversations.map((conv) => (
@@ -96,7 +125,7 @@ export function Messages() {
                   }`}
                   onClick={() => setSelectedId(conv.id)}
                 >
-                  <div className="font-semibold text-white">{conv.id.slice(0, 8)}...</div>
+                  <div className="font-semibold text-white">{labelForConv(conv)}</div>
                   <div className="mt-1 text-[11px] text-slate-400">
                     {new Date(conv.updatedAt).toLocaleString()}
                   </div>
@@ -117,14 +146,25 @@ export function Messages() {
               </h3>
             </div>
             <div className="flex-1 space-y-3 overflow-y-auto py-6">
-              {messages.map((msg) => (
-                <div key={msg.id} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
-                  <div className="text-[10px] uppercase tracking-[0.3em] text-slate-500">
-                    {msg.senderId.slice(0, 6)} • {new Date(msg.createdAt).toLocaleString()}
+              {messages.map((msg) => {
+                const isMine = msg.senderId === user?.id;
+                return (
+                  <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[75%] rounded-3xl border px-4 py-3 text-sm ${
+                        isMine
+                          ? "border-jade-400/40 bg-jade-500/20 text-jade-50"
+                          : "border-white/10 bg-white/5 text-slate-100"
+                      }`}
+                    >
+                      <div className="text-[10px] uppercase tracking-[0.3em] text-slate-500">
+                        {msg.senderId.slice(0, 6)} • {new Date(msg.createdAt).toLocaleString()}
+                      </div>
+                      <div className="mt-2 text-sm leading-relaxed">{msg.text}</div>
+                    </div>
                   </div>
-                  <div className="mt-2 text-sm text-slate-100">{msg.text}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div className="border-t border-white/10 pt-4">
               <div className="flex flex-col gap-3 sm:flex-row">

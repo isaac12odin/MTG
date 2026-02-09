@@ -20,6 +20,7 @@ import { chatRoutes } from "./modules/chat/chat.routes";
 import { reviewRoutes } from "./modules/reviews/reviews.routes";
 import { mediaRoutes } from "./modules/media/media.routes";
 import { userRoutes } from "./modules/users/users.routes";
+import { plansRoutes } from "./modules/plans/plans.routes";
 import { adminRoutes } from "./modules/admin/admin.routes";
 import { prisma } from "./db";
 import { startCron } from "./cron";
@@ -90,6 +91,7 @@ async function start() {
   await app.register(reviewRoutes);
   await app.register(mediaRoutes);
   await app.register(userRoutes);
+  await app.register(plansRoutes);
   await app.register(adminRoutes);
 
   const port = Number(process.env.PORT ?? 3000);

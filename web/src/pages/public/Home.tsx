@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../lib/api";
-import { useAuth } from "../../app/providers/AuthProvider";
 
 const VARIANT_ORDER = ["SMALL", "MEDIUM", "THUMB", "LARGE"] as const;
 
@@ -19,10 +18,17 @@ type Listing = {
   currency?: string;
   condition?: string | null;
   createdAt?: string;
-  sellerId?: string;
   items?: Array<{ card?: { name?: string | null } | null; qty?: number | null }>;
   media?: Array<{ asset?: { variants?: MediaVariant[] | null } | null }>;
-  auction?: { endAt?: string | null; topAmount?: string | number | null } | null;
+};
+
+type AuctionRow = {
+  id: string;
+  status: string;
+  endAt: string;
+  topAmount?: string | number | null;
+  startPrice?: string | number | null;
+  listing: Listing & { shippingFrom?: { city?: string | null; state?: string | null } | null };
 };
 
 type Game = {
@@ -30,12 +36,7 @@ type Game = {
   name: string;
 };
 
-const fallbackCards: Listing[] = [
-  { id: "1", title: "Black Lotus (Proxy)", type: "FIXED", askPrice: "—", currency: "MXN", condition: "NM" },
-  { id: "2", title: "Charizard Base Set", type: "FIXED", askPrice: "—", currency: "MXN", condition: "LP" },
-  { id: "3", title: "Blue-Eyes White Dragon", type: "AUCTION", askPrice: "—", currency: "MXN", condition: "MP" },
-  { id: "4", title: "Luffy Gear 5", type: "TRADE", askPrice: "—", currency: "MXN", condition: "NM" },
-];
+const fallbackCards: Listing[] = [];
 
 function pickVariant(variants?: MediaVariant[] | null) {
   if (!variants?.length) return null;
@@ -60,43 +61,39 @@ function formatPrice(price?: string | number | null, currency?: string) {
   return `${price.toLocaleString("es-MX")} ${currency ?? "MXN"}`;
 }
 
-function timeLabel(iso?: string) {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("es-MX", { month: "short", day: "numeric" });
-}
-
 export function Home() {
-  const { user } = useAuth();
   const [listings, setListings] = useState<Listing[]>(fallbackCards);
+  const [auctions, setAuctions] = useState<AuctionRow[]>([]);
   const [games, setGames] = useState<Game[]>([]);
   const [query, setQuery] = useState("");
   const [gameId, setGameId] = useState("");
-  const [type, setType] = useState<"" | "FIXED" | "AUCTION" | "TRADE">("");
+  const [type, setType] = useState<"" | "FIXED" | "TRADE">("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    apiFetch<{ data: Listing[] }>("/listings?page=1&pageSize=12")
-      .then((res) => {
-        if (res.data && res.data.length > 0) {
-          setListings(res.data);
-        }
-      })
-      .catch(() => {
-        setListings(fallbackCards);
-      });
+  const loadBase = async () => {
+    const [gamesRes, listingsRes, auctionsRes] = await Promise.all([
+      apiFetch<{ data: Game[] }>("/catalog/games"),
+      apiFetch<{ data: Listing[] }>("/listings?page=1&pageSize=18"),
+      apiFetch<{ data: AuctionRow[] }>("/auctions?status=LIVE&page=1&pageSize=8"),
+    ]);
+    setGames(gamesRes.data ?? []);
+    setListings(listingsRes.data ?? []);
+    setAuctions(auctionsRes.data ?? []);
+  };
 
-    apiFetch<{ data: Game[] }>("/catalog/games")
-      .then((res) => setGames(res.data))
-      .catch(() => setGames([]));
+  useEffect(() => {
+    loadBase().catch(() => {
+      setListings(fallbackCards);
+      setAuctions([]);
+      setGames([]);
+    });
   }, []);
 
   const handleSearch = async () => {
     setLoading(true);
     const params = new URLSearchParams();
     params.set("page", "1");
-    params.set("pageSize", "18");
+    params.set("pageSize", "24");
     if (query.trim()) params.set("q", query.trim());
     if (gameId) params.set("gameId", gameId);
     if (type) params.set("type", type);
@@ -110,38 +107,29 @@ export function Home() {
     }
   };
 
-  const auctions = useMemo(
-    () => listings.filter((item) => item.type === "AUCTION").slice(0, 4),
+  const fixedListings = useMemo(
+    () => listings.filter((item) => item.type === "FIXED" || item.type === "TRADE"),
     [listings]
   );
 
   return (
     <div className="min-h-screen bg-ink-950 text-slate-100">
-      <section className="mx-auto max-w-7xl px-6 pb-6 pt-10">
+      <header className="mx-auto max-w-7xl px-6 py-10">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.45em] text-amber-300/80">Feed social TCG</p>
+            <p className="text-xs uppercase tracking-[0.45em] text-amber-300/80">TCG Marketplace</p>
             <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">
-              {user ? "Hola, vuelve a comprar cartas" : "Compra, vende y subasta como comunidad"}
+              Cartas reales, subastas en vivo y vendedores verificados
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-400">
-              Descubre publicaciones en tiempo real, sigue vendedores confiables y participa en subastas
-              con evidencia y reputación.
+              Busca singles, lotes y subastas activas. Compra directo al vendedor con reputación y evidencia.
             </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <button className="rounded-2xl border border-white/10 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white/80">
-              Explorar tiendas
-            </button>
-            <button className="rounded-2xl bg-jade-500 px-5 py-2 text-xs font-semibold text-ink-950">
-              Publicar carta
-            </button>
           </div>
         </div>
 
-        <div className="mt-6 flex flex-col gap-3 rounded-3xl border border-white/10 bg-ink-900/70 p-4 sm:flex-row sm:items-center">
+        <div className="mt-6 grid gap-3 rounded-3xl border border-white/10 bg-ink-900/70 p-4 md:grid-cols-[1fr,200px,200px,160px]">
           <input
-            className="flex-1 rounded-2xl border border-white/10 bg-ink-950/60 px-4 py-3 text-sm text-white"
+            className="rounded-2xl border border-white/10 bg-ink-950/60 px-4 py-3 text-sm text-white"
             placeholder="Buscar carta, set o vendedor"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -161,185 +149,102 @@ export function Home() {
           <select
             className="rounded-2xl border border-white/10 bg-ink-950/60 px-4 py-3 text-sm text-white"
             value={type}
-            onChange={(e) => setType(e.target.value as "" | "FIXED" | "AUCTION" | "TRADE")}
+            onChange={(e) => setType(e.target.value as "" | "FIXED" | "TRADE")}
           >
-            <option value="">Todo</option>
+            <option value="">Tipo</option>
             <option value="FIXED">Venta fija</option>
-            <option value="AUCTION">Subastas</option>
             <option value="TRADE">Intercambio</option>
           </select>
           <button
-            className="rounded-2xl bg-jade-500 px-6 py-3 text-sm font-semibold text-ink-950"
+            className="rounded-2xl bg-jade-500 px-4 py-3 text-sm font-semibold text-ink-950"
             onClick={handleSearch}
             disabled={loading}
           >
             {loading ? "Buscando..." : "Buscar"}
           </button>
         </div>
-      </section>
+      </header>
 
-      <section className="mx-auto grid max-w-7xl gap-6 px-6 pb-16 lg:grid-cols-[240px,1fr,300px]">
-        <aside className="order-2 space-y-6 lg:order-1">
-          <div className="rounded-3xl border border-white/10 bg-ink-900/60 p-5">
-            <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Juegos</p>
-            <div className="mt-4 flex flex-col gap-2 text-sm text-slate-300">
-              {games.length ? (
-                games.slice(0, 10).map((g) => (
-                  <button
-                    key={g.id}
-                    className={`rounded-xl border px-3 py-2 text-left transition ${
-                      gameId === g.id
-                        ? "border-jade-400/70 bg-jade-500/10 text-jade-200"
-                        : "border-white/10 bg-white/5 hover:border-jade-400/40"
-                    }`}
-                    onClick={() => setGameId(g.id)}
-                  >
-                    {g.name}
-                  </button>
-                ))
-              ) : (
-                <p className="text-xs text-slate-500">Sin juegos cargados.</p>
-              )}
-              <button
-                className="rounded-xl border border-white/10 px-3 py-2 text-left text-xs text-slate-400"
-                onClick={() => setGameId("")}
-              >
-                Limpiar filtro
-              </button>
-            </div>
+      <section className="mx-auto grid max-w-7xl gap-6 px-6 pb-16 lg:grid-cols-[1fr,320px]">
+        <div>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-white">Cartas recientes</h2>
+            <a className="text-xs uppercase tracking-[0.2em] text-slate-400" href="/">
+              Ver todo
+            </a>
           </div>
-
-          <div className="rounded-3xl border border-white/10 bg-ink-900/60 p-5">
-            <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Acciones rápidas</p>
-            <div className="mt-4 space-y-3 text-sm">
-              <a className="block rounded-2xl border border-white/10 bg-white/5 px-4 py-3" href="/register">
-                Verificación de vendedor
-              </a>
-              <a className="block rounded-2xl border border-white/10 bg-white/5 px-4 py-3" href="/messages">
-                Ir a mensajes
-              </a>
-              <a className="block rounded-2xl border border-white/10 bg-white/5 px-4 py-3" href="/seller">
-                Subir inventario
-              </a>
-            </div>
-          </div>
-        </aside>
-
-        <main className="order-1 space-y-6 lg:order-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs uppercase tracking-[0.4em] text-amber-400/80">Feed</p>
-            <span className="text-xs text-slate-400">
-              {listings.length} publicaciones
-            </span>
-          </div>
-
-          <div className="space-y-4">
-            {listings.length ? (
-              listings.map((card) => {
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {fixedListings.length ? (
+              fixedListings.map((card) => {
                 const imageUrl = resolveImage(card);
                 return (
-                  <article
+                  <a
                     key={card.id}
-                    className="rounded-3xl border border-white/10 bg-ink-900/60 p-4 transition hover:border-jade-400/40"
+                    href={`/listing/${card.id}`}
+                    className="rounded-3xl border border-white/10 bg-ink-900/60 p-4 transition hover:border-jade-400/50"
                   >
-                    <div className="flex flex-col gap-4 sm:flex-row">
-                      <div className="relative h-40 w-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-ink-900 via-ink-900/40 to-jade-500/10 sm:h-36 sm:w-48">
-                        {imageUrl ? (
-                          <img src={imageUrl} alt={card.title} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">
-                            Sin imagen
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                          <span className="rounded-full border border-white/10 px-3 py-1">
-                            {card.type === "FIXED" && "Venta fija"}
-                            {card.type === "AUCTION" && "Subasta"}
-                            {card.type === "TRADE" && "Intercambio"}
-                          </span>
-                          {card.condition && (
-                            <span className="rounded-full border border-white/10 px-3 py-1">{card.condition}</span>
-                          )}
-                          {card.createdAt && <span>• {timeLabel(card.createdAt)}</span>}
+                    <div className="relative h-40 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                      {imageUrl ? (
+                        <img src={imageUrl} alt={card.title} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">
+                          Sin imagen
                         </div>
-                        <h3 className="text-lg font-semibold text-white">{card.title}</h3>
-                        <p className="text-xs text-slate-400">
-                          {card.items?.[0]?.card?.name ? `Carta: ${card.items[0].card?.name}` : "Publicación reciente"}
-                        </p>
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="text-xs text-slate-500">Precio / Puja</p>
-                            <p className="text-lg font-semibold text-jade-300">
-                              {formatPrice(card.askPrice, card.currency)}
-                            </p>
-                          </div>
-                          <div className="flex gap-2">
-                            <a
-                              href={`/listing/${card.id}`}
-                              className="rounded-full border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/80"
-                            >
-                              Ver detalle
-                            </a>
-                            <a
-                              href={`/listing/${card.id}`}
-                              className="rounded-full bg-jade-500 px-4 py-2 text-xs font-semibold text-ink-950"
-                            >
-                              {card.type === "AUCTION" ? "Pujar" : "Contactar"}
-                            </a>
-                          </div>
-                        </div>
-                      </div>
+                      )}
                     </div>
-                  </article>
+                    <div className="mt-4 space-y-1">
+                      <p className="text-sm font-semibold text-white">{card.title}</p>
+                      <p className="text-xs text-slate-400">Condición: {card.condition ?? "—"}</p>
+                      <p className="text-lg font-semibold text-jade-300">
+                        {formatPrice(card.askPrice, card.currency)}
+                      </p>
+                    </div>
+                  </a>
                 );
               })
             ) : (
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-400">
-                No encontramos cartas con esos filtros.
+              <div className="col-span-full rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-400">
+                No hay publicaciones todavía.
               </div>
             )}
           </div>
-        </main>
+        </div>
 
-        <aside className="order-3 space-y-6">
+        <aside className="space-y-4">
           <div className="rounded-3xl border border-white/10 bg-ink-900/60 p-5">
-            <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Subastas activas</p>
-            <div className="mt-4 space-y-3 text-sm">
+            <h3 className="text-sm font-semibold text-white">Subastas en vivo</h3>
+            <div className="mt-4 space-y-3">
               {auctions.length ? (
                 auctions.map((auction) => (
                   <a
                     key={auction.id}
-                    href={`/listing/${auction.id}`}
-                    className="block rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+                    href={`/listing/${auction.listing.id}`}
+                    className="block rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm"
                   >
-                    <p className="text-sm font-semibold text-white">{auction.title}</p>
+                    <p className="text-sm font-semibold text-white">{auction.listing.title}</p>
                     <p className="mt-1 text-xs text-slate-400">
-                      Termina: {auction.auction?.endAt ? timeLabel(auction.auction.endAt) : "—"}
+                      Puja actual: {formatPrice(auction.topAmount ?? auction.startPrice, auction.listing.currency)}
                     </p>
+                    <p className="text-xs text-slate-500">Termina: {new Date(auction.endAt).toLocaleString()}</p>
                   </a>
                 ))
               ) : (
-                <p className="text-xs text-slate-500">Sin subastas por ahora.</p>
+                <p className="text-xs text-slate-500">Sin subastas activas.</p>
               )}
             </div>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-ink-900/60 p-5">
-            <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Estadísticas</p>
-            <div className="mt-4 space-y-3">
-              {[
-                { label: "Cartas hoy", value: "—" },
-                { label: "Vendedores activos", value: "—" },
-                { label: "Tratos completados", value: "—" },
-              ].map((stat) => (
-                <div key={stat.label} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                  <p className="text-xs text-slate-400">{stat.label}</p>
-                  <p className="text-lg font-semibold text-white">{stat.value}</p>
-                </div>
-              ))}
-            </div>
+            <h3 className="text-sm font-semibold text-white">Publica rápido</h3>
+            <p className="mt-2 text-xs text-slate-400">
+              Vende singles o subasta en minutos. Verificación manual y reputación.
+            </p>
+            <a
+              className="mt-4 inline-flex rounded-2xl bg-jade-500 px-4 py-2 text-xs font-semibold text-ink-950"
+              href="/seller"
+            >
+              Ir al panel vendedor
+            </a>
           </div>
         </aside>
       </section>
